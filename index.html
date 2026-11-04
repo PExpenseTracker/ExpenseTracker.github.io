@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="page-wrapper">
+        <div class="form-panel">
+            <div class="form-card">
+                <div class="brand-logo centered-header">
+                    <span class="logo-icon">⚡</span>
+                    <span class="logo-text">Expense Tracker</span>
+                </div>
+
+                <form id="loginForm" novalidate>
+                    <div class="input-field">
+                        <div class="input-wrapper">
+                            <input type="password" id="password" placeholder=" " required autofocus>
+                            <label for="password" class="floating-label">Password</label>
+                            <svg class="field-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            <button type="button" class="toggle-password" id="togglePassword" aria-label="Toggle password visibility">Show</button>
+                        </div>
+                        <div class="error-toast" id="errorToast">
+                            ⚠️ Incorrect Password, Please Try Again.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        <span>Verify</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
