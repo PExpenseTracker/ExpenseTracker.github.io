@@ -397,24 +397,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateSummaryCards() {
-        const totalIncome = transactions
-            .filter(t => t.type === 'income')
-            .reduce((sum, t) => sum + parseCurrencyValue(t.amount), 0);
+        // Calculate Total Income dynamically: if editing the form, use active field inputs, otherwise use stored data
+        let totalIncome = 0;
+        const selectedMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
 
-        const totalExpenses = transactions
+        if (isEditingIncome) {
+            const s = parseCurrencyValue(salaryInput.value);
+            const ex = parseCurrencyValue(extraInput.value);
+            const b = parseCurrencyValue(bonusInput.value);
+            const o = parseCurrencyValue(othersInput.value);
+            totalIncome = s + ex + b + o;
+        } else {
+            const activeInc = monthlyIncomes[selectedMonth] || { salary: 0, extra: 0, bonus: 0, others: 0 };
+            totalIncome = (activeInc.salary || 0) + (activeInc.extra || 0) + (activeInc.bonus || 0) + (activeInc.others || 0);
+        }
+
+        // Expenses summary card tracks actual paid transactions (To Be Paid + Daily)
+        const totalPaidExpenses = transactions
             .filter(t => t.type === 'expense')
             .reduce((sum, t) => sum + parseCurrencyValue(t.amount), 0);
 
-        const balance = totalIncome - totalExpenses;
+        // Get the exact Total Bill Amount currently shown in the Bills tab footer
+        const filterMonthVal = billsFilterMonth ? billsFilterMonth.value : 'all';
+        let filteredBills = bills;
+        if (filterMonthVal !== 'all') {
+            const targetMonth = parseInt(filterMonthVal);
+            filteredBills = bills.filter(bill => {
+                const billMonth = new Date(bill.dueDate).getMonth();
+                return billMonth === targetMonth;
+            });
+        }
+        const unpaidFilteredBills = filteredBills.filter(b => !b.isPaid);
+        const totalUnpaidBillsAmount = unpaidFilteredBills.reduce((sum, b) => sum + parseCurrencyValue(b.amount), 0);
+
+        // Balance = Total Income - Total Bill Amount (Shortage shows as negative format)
+        const balanceValue = totalIncome - totalUnpaidBillsAmount;
+        const balanceEl = document.getElementById('totalBalance');
 
         document.getElementById('totalIncome').textContent = `+₱${formatCurrency(totalIncome)}`;
-        document.getElementById('totalExpenses').textContent = `-₱${formatCurrency(totalExpenses)}`;
-        document.getElementById('totalBalance').textContent = `₱${formatCurrency(balance)}`;
+        document.getElementById('totalExpenses').textContent = `-₱${formatCurrency(totalPaidExpenses)}`;
+        
+        if (balanceValue < 0) {
+            balanceEl.textContent = `-₱${formatCurrency(Math.abs(balanceValue))}`;
+            balanceEl.style.color = '#ef4444';
+        } else {
+            balanceEl.textContent = `₱${formatCurrency(balanceValue)}`;
+            balanceEl.style.color = 'var(--text-primary)';
+        }
 
         updateHomeIncomeProgress();
         renderHistory();
         renderSpendingPieChart();
     }
+
+    // LIVE INSTANT UPDATE LISTENERS FOR INCOME BREAKDOWN FIELDS
+    [salaryInput, extraInput, bonusInput, othersInput].forEach(inputEl => {
+        if (inputEl) {
+            inputEl.addEventListener('input', () => {
+                updateSummaryCards();
+            });
+        }
+    });
 
     function updateHomeIncomeProgress() {
         const activeMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
@@ -678,6 +721,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         incomeMonthSelect.addEventListener('change', () => {
             loadFormForSelectedMonth();
             updateHomeIncomeProgress();
+            updateSummaryCards();
         });
     }
 
@@ -916,6 +960,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.deleteBill = async function(billId) {
         bills = bills.filter(bill => bill.id !== billId);
         renderBills();
+        updateSummaryCards();
         const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
         supabaseClient.from(prefix + 'bills').delete().eq('id', billId).then();
     };
@@ -934,15 +979,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        // Calculate and render filtered total sum using ONLY UNPAID bills in footer
+        const unpaidFilteredBills = filteredBills.filter(b => !b.isPaid);
+        const filteredTotalSum = unpaidFilteredBills.reduce((sum, b) => sum + parseCurrencyValue(b.amount), 0);
+        
+        const billsTotalAmountText = document.getElementById('billsTotalAmountText');
+        if (billsTotalAmountText) {
+            billsTotalAmountText.textContent = `₱${formatCurrency(filteredTotalSum)}`;
+        }
+
         if (filteredBills.length === 0) {
             billsList.innerHTML = '<li class="empty-state">No bills found for this month.</li>';
+            updateSummaryCards();
             return;
         }
 
         filteredBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
         const fragment = document.createDocumentFragment();
 
-        // Mapping dictionary to display "Lifetime" instead of "permanent"
         const recurrenceLabels = {
             'one-time': 'One-Time',
             'monthly': 'Monthly',
@@ -980,6 +1034,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             fragment.appendChild(li);
         });
         billsList.appendChild(fragment);
+        updateSummaryCards();
     }
 
     billForm.addEventListener('submit', async (e) => {
@@ -1075,6 +1130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         setIncomeInputsEditable(false);
 
+        // Completely clean out previous profile income entries for this month to prevent doubling
         transactions = transactions.filter(t => !(t.source === 'profile_income' && t.monthIndex === selectedMonth));
 
         if (totalProfileIncome > 0) {
@@ -1096,14 +1152,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
             
-            supabaseClient.from(prefix + 'profile_incomes').upsert({
+            await supabaseClient.from(prefix + 'profile_incomes').upsert({
                 month_index: selectedMonth,
                 salary: salary,
                 extra: extra,
                 bonus: bonus,
                 others: others,
                 updated_at: new Date()
-            }).then();
+            });
 
             await supabaseClient.from(prefix + 'history').delete().eq('source', 'profile_income');
 
