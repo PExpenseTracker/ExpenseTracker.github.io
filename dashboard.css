@@ -219,7 +219,7 @@ body.dashboard-body {
     color: var(--primary);
 }
 
-/* Modal Window Styles */
+/* Modal Window Styles & Mobile Virtual Keyboard Alignment Fix */
 .app-modal {
     display: none;
     position: fixed;
@@ -230,9 +230,10 @@ body.dashboard-body {
     background: rgba(15, 23, 42, 0.7);
     backdrop-filter: blur(4px);
     z-index: 200;
-    align-items: center;
+    align-items: flex-start; /* Aligns modal towards the top so virtual keyboard won't hide inputs/buttons */
     justify-content: center;
-    padding: 16px;
+    overflow-y: auto;        /* Allows scrolling when keyboard pops up */
+    padding: 20px 16px 40px 16px;
 }
 
 .app-modal.active {
@@ -244,13 +245,15 @@ body.dashboard-body {
     border-radius: var(--radius-lg);
     width: 100%;
     max-width: 420px;
-    max-height: 90vh;
-    overflow-y: auto;
+    max-height: 85vh;        /* Keeps it within the visible screen bounds above the mobile keyboard */
+    overflow-y: auto;        /* Enables scrolling inside long forms */
     padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 12px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+    margin-top: 10px;
+    margin-bottom: env(safe-area-inset-bottom);
 }
 
 /* Custom Error Modal Override (Guarantees top layer visibility) */
