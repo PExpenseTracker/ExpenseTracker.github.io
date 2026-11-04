@@ -128,6 +128,11 @@
                             <li class="empty-state">No bills recorded yet.</li>
                         </ul>
                     </div>
+                    <!-- Total Bill Amount Footer Row -->
+                    <div id="billsTotalFooter" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f1f5f9; border-top: 1.5px solid var(--border-light); border-radius: 8px; margin-top: 8px; font-weight: 800; font-size: 12px;">
+                        <span>Total Bill Amount</span>
+                        <span id="billsTotalAmountText" style="color: #ef4444;">₱0.00</span>
+                    </div>
                 </div>
             </div>
 
@@ -307,7 +312,7 @@
                                 <input type="radio" name="recurrenceType" value="monthly" style="width: 14px; height: 14px;"> Monthly
                             </label>
                             <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                                <input type="radio" name="recurrenceType" value="permanent" style="width: 14px; height: 14px;"> Lifetime
+                                <input type="radio" name="recurrenceType" value="permanent" style="width: 14px; height: 14px;"> Permanently
                             </label>
                         </div>
                         <div id="monthlyCountRow" class="form-row-horizontal monthly-count-slot">
@@ -354,7 +359,7 @@
 
                     <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;" id="splitContainerWrapper">
                         <input type="checkbox" id="splitAmountCheck" style="width: 16px; height: 16px; cursor: pointer;">
-                        <label for="splitAmountCheck" style="font-size: 11px; font-weight: 700; color: var(--text-primary); cursor: pointer;">Split Amount</label>
+                        <label for="splitAmountCheck" style="font-size: 11px; font-weight: 700; color: var(--text-primary); cursor: pointer;">Split Amount across Income sources</label>
                     </div>
 
                     <div id="splitDeductionContainer" style="display: flex; flex-direction: column; gap: 10px; padding: 8px; background: #f8fafc; border: 1px dashed var(--border-light); border-radius: 6px;">
@@ -426,7 +431,7 @@
         </div>
     </div>
 
-    <!-- MODAL 4: Custom In-App Error Modal (With z-index 99999 to sit on top of everything) -->
+    <!-- MODAL 4: Custom In-App Error Modal -->
     <div id="errorModal" class="app-modal" style="z-index: 99999 !important;">
         <div class="modal-content" style="max-width: 320px; text-align: center; padding: 20px;">
             <div class="section-header" style="justify-content: center; margin-bottom: 12px;">
