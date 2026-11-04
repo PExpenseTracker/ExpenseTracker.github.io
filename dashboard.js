@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             billModalTitle.textContent = 'Bills';
             toggleBillEditDropdownBtn.style.display = 'none';
             billNameInput.readOnly = false;
-            billNameInput.placeholder = '';
+            billNameInput.placeholder = 'e.g., Electricity';
             recurrenceSectionWrapper.style.display = 'flex';
             saveBillBtn.textContent = 'Save Bill';
             editingBillId = null;
@@ -465,7 +465,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const [y, m, d] = txDateStr.split('-');
             if (y && m && d) txDateStr = `${m}/${d}/${y}`;
 
-            // If it's a profile income, do not display the source badge pill next to it
             const isProfileIncome = t.source === 'profile_income';
 
             li.innerHTML = `
@@ -943,6 +942,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         filteredBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
         const fragment = document.createDocumentFragment();
 
+        // Mapping dictionary to display "Lifetime" instead of "permanent"
+        const recurrenceLabels = {
+            'one-time': 'One-Time',
+            'monthly': 'Monthly',
+            'permanent': 'Lifetime'
+        };
+
         filteredBills.forEach(bill => {
             const li = document.createElement('li');
             li.className = `bill-item-row ${bill.isPaid ? 'is-paid' : ''}`;
@@ -950,13 +956,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const [year, month, day] = bill.dueDate.split('-');
             const formattedDate = `${month}/${day}/${year}`;
             const formattedAmount = formatCurrency(bill.amount);
+            const displayRecurrence = recurrenceLabels[bill.recurrence] || bill.recurrence;
 
             li.innerHTML = `
                 <div class="bill-info">
                     <div class="bill-name-wrapper">
                         <span class="bill-name">${bill.name}</span>
                         ${bill.isPaid ? '<span class="paid-badge">Paid</span>' : ''}
-                        <span class="recurrence-badge">${bill.recurrence}</span>
+                        <span class="recurrence-badge">${displayRecurrence}</span>
                     </div>
                     <span class="bill-date">Due: ${formattedDate}</span>
                 </div>
