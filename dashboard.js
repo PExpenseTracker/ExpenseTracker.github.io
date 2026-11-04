@@ -397,7 +397,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateSummaryCards() {
-        // Calculate Total Income dynamically: if editing the form, use active field inputs, otherwise use stored data
         let totalIncome = 0;
         const selectedMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
 
@@ -412,12 +411,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             totalIncome = (activeInc.salary || 0) + (activeInc.extra || 0) + (activeInc.bonus || 0) + (activeInc.others || 0);
         }
 
-        // Expenses summary card tracks actual paid transactions (To Be Paid + Daily)
         const totalPaidExpenses = transactions
             .filter(t => t.type === 'expense')
             .reduce((sum, t) => sum + parseCurrencyValue(t.amount), 0);
 
-        // Get the exact Total Bill Amount currently shown in the Bills tab footer
         const filterMonthVal = billsFilterMonth ? billsFilterMonth.value : 'all';
         let filteredBills = bills;
         if (filterMonthVal !== 'all') {
@@ -430,7 +427,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const unpaidFilteredBills = filteredBills.filter(b => !b.isPaid);
         const totalUnpaidBillsAmount = unpaidFilteredBills.reduce((sum, b) => sum + parseCurrencyValue(b.amount), 0);
 
-        // Balance = Total Income - Total Bill Amount (Shortage shows as negative format)
         const balanceValue = totalIncome - totalUnpaidBillsAmount;
         const balanceEl = document.getElementById('totalBalance');
 
@@ -450,7 +446,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderSpendingPieChart();
     }
 
-    // LIVE INSTANT UPDATE LISTENERS FOR INCOME BREAKDOWN FIELDS
     [salaryInput, extraInput, bonusInput, othersInput].forEach(inputEl => {
         if (inputEl) {
             inputEl.addEventListener('input', () => {
@@ -499,6 +494,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sorted = [...transactions].reverse();
         const fragment = document.createDocumentFragment();
 
+        const monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+
         sorted.forEach(t => {
             const li = document.createElement('li');
             li.className = 'bill-item-row';
@@ -506,17 +506,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let txDateStr = t.date || getTodayLocalDateStr();
             const [y, m, d] = txDateStr.split('-');
-            if (y && m && d) txDateStr = `${m}/${d}/${y}`;
+            if (y && m && d) {
+                const monthName = monthNames[parseInt(m, 10) - 1] || m;
+                txDateStr = `${monthName} ${d}, ${y}`;
+            }
 
-            const isProfileIncome = t.source === 'profile_income';
+            // Identify raw income breakdown form inputs so we don't show the badge for them
+            const sourceLower = (t.source || '').trim().toLowerCase();
+            const incomeBreakdownSources = ['salary', 'extra', 'bonus', 'others', 'profile_income'];
+            const isIncomeBreakdownEntry = incomeBreakdownSources.includes(sourceLower) && isInc;
+
+            let displaySource = t.source || '';
+            if (sourceLower === 'salary') displaySource = 'Salary';
+            else if (sourceLower === 'extra') displaySource = 'Extra';
+            else if (sourceLower === 'bonus') displaySource = 'Bonus';
+            else if (sourceLower === 'others') displaySource = 'Others';
 
             li.innerHTML = `
                 <div class="bill-info">
                     <div class="bill-name-wrapper">
                         <span class="bill-name">${t.desc}</span>
-                        ${isProfileIncome ? '' : `<span class="recurrence-badge">${t.source || 'General'}</span>`}
+                        ${isIncomeBreakdownEntry ? '' : `<span class="recurrence-badge">${displaySource || 'General'}</span>`}
                     </div>
-                    <span class="bill-date">${txDateStr} • ${t.type.toUpperCase()}</span>
+                    <span class="bill-date">${txDateStr}</span>
                 </div>
                 <div class="bill-actions">
                     <span class="bill-amount" style="color: ${isInc ? 'var(--accent)' : '#ef4444'}">${isInc ? '+' : '-'}₱${formatCurrency(t.amount)}</span>
@@ -616,7 +628,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (historyRes.data) {
                 transactions = historyRes.data.map(t => ({
                     id: t.id,
-                    desc: t.source === 'profile_income' ? 'Income' : t.description,
+                    desc: t.description,
                     amount: t.amount,
                     type: t.type,
                     source: t.source,
@@ -725,7 +737,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Account Switcher Event Listener
     if (accountSwitchSelect) {
         accountSwitchSelect.addEventListener('change', async (e) => {
             currentAccount = e.target.value;
@@ -772,7 +783,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Quick Entry Form Submission
     quickTransactionForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
@@ -979,7 +989,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // Calculate and render filtered total sum using ONLY UNPAID bills in footer
         const unpaidFilteredBills = filteredBills.filter(b => !b.isPaid);
         const filteredTotalSum = unpaidFilteredBills.reduce((sum, b) => sum + parseCurrencyValue(b.amount), 0);
         
@@ -1125,33 +1134,80 @@ document.addEventListener('DOMContentLoaded', async () => {
         const bonus = parseCurrencyValue(bonusInput.value);
         const others = parseCurrencyValue(othersInput.value);
 
-        monthlyIncomes[selectedMonth] = { salary, extra, bonus, others };
-        const totalProfileIncome = salary + extra + bonus + others;
+        const oldData = monthlyIncomes[selectedMonth] || { salary: 0, extra: 0, bonus: 0, others: 0 };
+        
+        const salaryDiff = salary - (oldData.salary || 0);
+        const extraDiff = extra - (oldData.extra || 0);
+        const bonusDiff = bonus - (oldData.bonus || 0);
+        const othersDiff = others - (oldData.others || 0);
 
+        monthlyIncomes[selectedMonth] = { salary, extra, bonus, others };
         setIncomeInputsEditable(false);
 
-        // Completely clean out previous profile income entries for this month to prevent doubling
-        transactions = transactions.filter(t => !(t.source === 'profile_income' && t.monthIndex === selectedMonth));
+        const todayStr = getTodayLocalDateStr();
+        const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+        let newHistoryEntries = [];
 
-        if (totalProfileIncome > 0) {
-            const profileTx = {
-                id: 'profile_income_group_' + selectedMonth + '_' + Date.now(),
-                desc: 'Income',
-                amount: totalProfileIncome,
+        if (salaryDiff > 0) {
+            newHistoryEntries.push({
+                id: 'income_salary_' + Date.now() + '_' + Math.random(),
+                description: 'Salary',
+                amount: salaryDiff,
                 type: 'income',
-                source: 'profile_income',
+                source: 'Salary',
                 monthIndex: selectedMonth,
-                date: getTodayLocalDateStr()
-            };
-
-            transactions.push(profileTx);
+                date: todayStr
+            });
         }
+        if (extraDiff > 0) {
+            newHistoryEntries.push({
+                id: 'income_extra_' + Date.now() + '_' + Math.random(),
+                description: 'Extra',
+                amount: extraDiff,
+                type: 'income',
+                source: 'Extra',
+                monthIndex: selectedMonth,
+                date: todayStr
+            });
+        }
+        if (bonusDiff > 0) {
+            newHistoryEntries.push({
+                id: 'income_bonus_' + Date.now() + '_' + Math.random(),
+                description: 'Bonus',
+                amount: bonusDiff,
+                type: 'income',
+                source: 'Bonus',
+                monthIndex: selectedMonth,
+                date: todayStr
+            });
+        }
+        if (othersDiff > 0) {
+            newHistoryEntries.push({
+                id: 'income_others_' + Date.now() + '_' + Math.random(),
+                description: 'Others',
+                amount: othersDiff,
+                type: 'income',
+                source: 'Others',
+                monthIndex: selectedMonth,
+                date: todayStr
+            });
+        }
+
+        newHistoryEntries.forEach(entry => {
+            transactions.push({
+                id: entry.id,
+                desc: entry.description,
+                amount: entry.amount,
+                type: entry.type,
+                source: entry.source,
+                monthIndex: entry.monthIndex,
+                date: entry.date
+            });
+        });
 
         updateSummaryCards();
 
         try {
-            const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
-            
             await supabaseClient.from(prefix + 'profile_incomes').upsert({
                 month_index: selectedMonth,
                 salary: salary,
@@ -1161,20 +1217,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updated_at: new Date()
             });
 
-            await supabaseClient.from(prefix + 'history').delete().eq('source', 'profile_income');
-
-            if (totalProfileIncome > 0) {
-                await supabaseClient.from(prefix + 'history').insert([{
-                    id: 'profile_income_group_' + selectedMonth,
-                    description: 'Income',
-                    amount: totalProfileIncome,
-                    type: 'income',
-                    source: 'profile_income',
-                    date: getTodayLocalDateStr()
-                }]);
+            if (newHistoryEntries.length > 0) {
+                await supabaseClient.from(prefix + 'history').insert(newHistoryEntries.map(entry => ({
+                    id: entry.id,
+                    description: entry.description,
+                    amount: entry.amount,
+                    type: entry.type,
+                    source: entry.source,
+                    date: entry.date
+                })));
             }
         } catch (err) {
-            console.error('Error saving profile income:', err);
+            console.error('Error saving profile income breakdown:', err);
         }
     });
 
