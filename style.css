@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
 :root {
     --primary: #6366f1;
     --primary-dark: #4f46e5;
@@ -24,9 +26,11 @@ body {
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
-    align-items: center;
+    /* Changed from center to flex-start with a top padding offset so the login box sits higher */
+    align-items: flex-start;
     justify-content: center;
-    padding: clamp(12px, 3vw, 24px);
+    padding: clamp(24px, 5vh, 48px) clamp(12px, 3vw, 24px);
+    overflow-y: auto; /* Allows scrolling if keyboard takes up space */
 }
 
 .page-wrapper {
@@ -37,11 +41,12 @@ body {
     display: flex;
     overflow: hidden;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+    margin-top: clamp(10px, 4vh, 40px); /* Lifts the card slightly higher from the top edge */
 }
 
 .form-panel {
     width: 100%;
-    padding: clamp(32px, 6vw, 48px);
+    padding: clamp(28px, 5vw, 48px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -60,7 +65,7 @@ body {
 
 .centered-header {
     justify-content: center;
-    margin-bottom: 36px;
+    margin-bottom: 32px;
 }
 
 .logo-icon { 
@@ -82,7 +87,7 @@ body {
 }
 
 .input-field { 
-    margin-bottom: 46px; 
+    margin-bottom: 40px; 
     position: relative; 
 }
 
@@ -227,5 +232,5 @@ body {
 
 @media (max-width: 380px) {
     body { padding: 8px; }
-    .form-panel { padding: 24px 16px; }
+    .form-panel { padding: 20px 16px; }
 }
