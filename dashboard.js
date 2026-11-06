@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const recurrenceRadios = document.querySelectorAll('input[name="recurrenceType"]');
     const recurrenceMonthsInput = document.getElementById('recurrenceMonths');
 
-    // In-App Custom Error Modal Elements (For Insufficient Funds Popup)
+    // In-App Custom Error Modal Elements
     const errorModal = document.getElementById('errorModal');
     const errorMessageText = document.getElementById('errorMessageText');
     const closeErrorModalBtn = document.getElementById('closeErrorModalBtn');
@@ -111,6 +111,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     let monthlyIncomes = {};
     let isEditingIncome = false;
 
+    // Autosave / Debounce helper to prevent spamming Supabase
+    let autosaveTimer = null;
+    function triggerAutosave(callback) {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(async () => {
+            if (typeof callback === 'function') {
+                await callback();
+            }
+        }, 1000); // 1-second autosave delay
+    }
+
     function getTodayLocalDateStr() {
         const localDate = new Date();
         const year = localDate.getFullYear();
@@ -143,17 +154,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!inputElement) return;
 
         inputElement.addEventListener('input', (e) => {
-            let value = e.target.value.replace(/[^0-9.]/g, '');
+            const input = e.target;
+            const originalVal = input.value;
+            const selectionStart = input.selectionStart;
+
+            const digitsBeforeCursor = originalVal.slice(0, selectionStart).replace(/[^0-9.]/g, '').length;
+
+            let value = originalVal.replace(/[^0-9.]/g, '');
             const parts = value.split('.');
             if (parts.length > 2) value = parts[0] + '.' + parts.slice(1).join('');
             if (parts[1] && parts[1].length > 2) value = parts[0] + '.' + parts[1].substring(0, 2);
 
+            let formattedValue = value;
             if (parts[0]) {
                 const formattedInteger = parseInt(parts[0], 10).toLocaleString('en-US');
-                e.target.value = parts.length > 1 ? `${formattedInteger}.${parts[1]}` : formattedInteger;
-            } else {
-                e.target.value = value;
+                formattedValue = parts.length > 1 ? `${formattedInteger}.${parts[1]}` : formattedInteger;
             }
+
+            input.value = formattedValue;
+
+            let newCursorPos = 0;
+            let digitsSeen = 0;
+
+            for (let i = 0; i < formattedValue.length; i++) {
+                if (/[0-9.]/.test(formattedValue[i])) {
+                    digitsSeen++;
+                }
+                if (digitsSeen === digitsBeforeCursor) {
+                    newCursorPos = i + 1;
+                    break;
+                }
+            }
+
+            if (digitsBeforeCursor === 0) {
+                newCursorPos = 0;
+            }
+
+            input.setSelectionRange(newCursorPos, newCursorPos);
         });
 
         inputElement.addEventListener('blur', (e) => {
@@ -167,6 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     setupCurrencyFormatting(amount1Input);
+    setupCurrencyFormatting(totalAmountInput);
     setupCurrencyFormatting(document.getElementById('dailyAmount'));
     setupCurrencyFormatting(document.getElementById('billAmount'));
     setupCurrencyFormatting(salaryInput);
@@ -182,7 +220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             billModalTitle.textContent = 'Edit Bill';
             toggleBillEditDropdownBtn.style.display = 'block';
             billNameInput.readOnly = true;
-            billNameInput.placeholder = 'Select bill from dropdown...';
+            billNameInput.placeholder = '';
             recurrenceSectionWrapper.style.display = 'flex';
             saveBillBtn.textContent = 'Update Bill';
             editingBillId = null;
@@ -450,6 +488,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (inputEl) {
             inputEl.addEventListener('input', () => {
                 updateSummaryCards();
+                // Autosave profile income changes instantly with a 1s debounce
+                triggerAutosave(async () => {
+                    const selectedMonth = parseInt(incomeMonthSelect.value);
+                    const salary = parseCurrencyValue(salaryInput.value);
+                    const extra = parseCurrencyValue(extraInput.value);
+                    const bonus = parseCurrencyValue(bonusInput.value);
+                    const others = parseCurrencyValue(othersInput.value);
+
+                    monthlyIncomes[selectedMonth] = { salary, extra, bonus, others };
+                    localStorage.setItem(`cached_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
+
+                    const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+                    await supabaseClient.from(prefix + 'profile_incomes').upsert({
+                        month_index: selectedMonth,
+                        salary: salary,
+                        extra: extra,
+                        bonus: bonus,
+                        others: others,
+                        updated_at: new Date()
+                    });
+                });
             });
         }
     });
@@ -511,7 +570,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 txDateStr = `${monthName} ${d}, ${y}`;
             }
 
-            // Identify raw income breakdown form inputs so we don't show the badge for them
             const sourceLower = (t.source || '').trim().toLowerCase();
             const incomeBreakdownSources = ['salary', 'extra', 'bonus', 'others', 'profile_income'];
             const isIncomeBreakdownEntry = incomeBreakdownSources.includes(sourceLower) && isInc;
@@ -597,6 +655,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadDataFromSupabase() {
         try {
+            // Instant local cache fallback so the UI loads immediately without waiting
+            const cachedBills = localStorage.getItem(`cache_bills_${currentAccount}`);
+            const cachedTx = localStorage.getItem(`cache_tx_${currentAccount}`);
+            const cachedIncomes = localStorage.getItem(`cache_incomes_${currentAccount}`);
+
+            if (cachedBills) bills = JSON.parse(cachedBills);
+            if (cachedTx) transactions = JSON.parse(cachedTx);
+            if (cachedIncomes) monthlyIncomes = JSON.parse(cachedIncomes);
+
+            if (cachedBills || cachedTx || cachedIncomes) {
+                loadFormForSelectedMonth();
+                updateSummaryCards();
+                renderBills();
+            }
+
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
             const billsTable = prefix + 'bills';
             const historyTable = prefix + 'history';
@@ -675,12 +748,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
+            // Sync latest data to localStorage cache
+            localStorage.setItem(`cache_bills_${currentAccount}`, JSON.stringify(bills));
+            localStorage.setItem(`cache_tx_${currentAccount}`, JSON.stringify(transactions));
+            localStorage.setItem(`cache_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
+
             loadFormForSelectedMonth();
             updateSummaryCards();
             renderBills();
         } catch (err) {
             console.error('Error fetching Supabase data:', err);
         }
+    }
+
+    function persistStateToLocalStorage() {
+        localStorage.setItem(`cache_bills_${currentAccount}`, JSON.stringify(bills));
+        localStorage.setItem(`cache_tx_${currentAccount}`, JSON.stringify(transactions));
+        localStorage.setItem(`cache_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
     }
 
     function loadFormForSelectedMonth() {
@@ -780,6 +864,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeFullscreenBtn.addEventListener('click', () => {
             isEditMode = !isEditMode;
             closeFullscreenBtn.classList.toggle('active', isEditMode);
+
+            const menuGrid = document.querySelector('.quick-entry-menu-grid');
+            if (menuGrid) {
+                menuGrid.classList.toggle('edit-mode-active', isEditMode);
+            }
         });
     }
 
@@ -790,6 +879,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         const totalAmt = parseCurrencyValue(totalAmountInput.value);
 
         if (!rawDesc || totalAmt <= 0) return;
+
+        const formattedDesc = rawDesc
+            .toLowerCase()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+
+        const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+
+        if (isEditMode) {
+            let matchingBill = null;
+            if (editingTxId) {
+                matchingBill = bills.find(b => b.id === editingTxId);
+            }
+            if (!matchingBill) {
+                matchingBill = bills.find(b => b.name.toLowerCase() === formattedDesc.toLowerCase());
+            }
+
+            if (matchingBill) {
+                matchingBill.name = formattedDesc;
+                matchingBill.amount = totalAmt;
+                if (quickDueDateInput && quickDueDateInput.value) {
+                    matchingBill.dueDate = quickDueDateInput.value;
+                }
+
+                supabaseClient.from(prefix + 'bills').update({
+                    name: formattedDesc,
+                    amount: totalAmt,
+                    due_date: matchingBill.dueDate
+                }).eq('id', matchingBill.id).then();
+            }
+
+            editingTxId = null;
+            quickTransactionForm.reset();
+            billTxModal.classList.remove('active');
+            if (splitAmountCheck) splitAmountCheck.checked = false;
+            amount2Row.classList.remove('active');
+            totalAmountInput.value = '';
+
+            persistStateToLocalStorage();
+            updateSummaryCards();
+            renderBills();
+            return;
+        }
 
         const activeMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
         const budgeted = monthlyIncomes[activeMonth] || { salary: 0, extra: 0, bonus: 0, others: 0 };
@@ -829,12 +962,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        const formattedDesc = rawDesc
-            .toLowerCase()
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-
         quickTransactionForm.reset();
         billTxModal.classList.remove('active');
         if (splitAmountCheck) splitAmountCheck.checked = false;
@@ -842,7 +969,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         totalAmountInput.value = '';
 
         try {
-            const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
             const newTxDb = {
                 id: 'hist_' + Date.now(),
                 description: formattedDesc,
@@ -871,10 +997,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (matchingBill) {
                 matchingBill.isPaid = true;
-                supabaseClient.from(prefix + 'bills').update({ is_paid: true }).eq('id', matchingBill.id).then();
+                matchingBill.amount = totalAmt;
+                supabaseClient.from(prefix + 'bills').update({ is_paid: true, amount: totalAmt }).eq('id', matchingBill.id).then();
             }
             editingTxId = null;
 
+            persistStateToLocalStorage();
             updateSummaryCards();
             renderBills();
 
@@ -947,6 +1075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 recurrence: newBillDb.recurrence
             });
 
+            persistStateToLocalStorage();
             updateSummaryCards();
             renderBills();
 
@@ -969,6 +1098,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.deleteBill = async function(billId) {
         bills = bills.filter(bill => bill.id !== billId);
+        persistStateToLocalStorage();
         renderBills();
         updateSummaryCards();
         const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
@@ -1072,6 +1202,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+            const numericAmount = parseCurrencyValue(amount);
+
+            if (editingBillId) {
+                const existingBill = bills.find(b => b.id === editingBillId);
+                if (existingBill) {
+                    existingBill.name = formattedName;
+                    existingBill.amount = numericAmount;
+                    existingBill.dueDate = startDateStr;
+                    existingBill.recurrence = selectedRecurrence;
+
+                    await supabaseClient.from(prefix + 'bills').update({
+                        name: formattedName,
+                        amount: numericAmount,
+                        due_date: startDateStr,
+                        recurrence: selectedRecurrence
+                    }).eq('id', editingBillId);
+                }
+
+                const matchingTx = transactions.find(t => t.desc.toLowerCase() === formattedName.toLowerCase() && t.source === 'Bill Created');
+                if (matchingTx) {
+                    matchingTx.amount = numericAmount;
+                    matchingTx.date = startDateStr;
+
+                    await supabaseClient.from(prefix + 'history').update({
+                        amount: numericAmount,
+                        date: startDateStr
+                    }).eq('id', matchingTx.id);
+                }
+
+                editingBillId = null;
+                persistStateToLocalStorage();
+                updateSummaryCards();
+                renderBills();
+                return;
+            }
+
             let datesToCreate = [startDateStr];
 
             if (selectedRecurrence === 'monthly') {
@@ -1090,10 +1256,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             for (let dStr of datesToCreate) {
                 const safeBillId = Date.now() + Math.floor(Math.random() * 100);
+                
                 const newBillDb = {
                     id: safeBillId,
                     name: formattedName,
-                    amount: parseCurrencyValue(amount),
+                    amount: numericAmount,
                     due_date: dStr,
                     is_paid: false,
                     recurrence: selectedRecurrence
@@ -1108,8 +1275,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                     recurrence: newBillDb.recurrence
                 });
 
+                const historyId = 'hist_bill_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+                const newTxDb = {
+                    id: historyId,
+                    description: formattedName,
+                    amount: numericAmount,
+                    type: 'expense',
+                    source: 'Bill Created',
+                    date: dStr
+                };
+
+                transactions.push({
+                    id: newTxDb.id,
+                    desc: newTxDb.description,
+                    amount: newTxDb.amount,
+                    type: newTxDb.type,
+                    source: newTxDb.source,
+                    date: newTxDb.date
+                });
+
                 supabaseClient.from(prefix + 'bills').insert([newBillDb]).then();
+                supabaseClient.from(prefix + 'history').insert([newTxDb]).then();
             }
+
+            persistStateToLocalStorage();
+            updateSummaryCards();
             renderBills();
         } catch (err) {
             console.error('Error saving bill:', err);
@@ -1148,45 +1338,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
         let newHistoryEntries = [];
 
-        if (salaryDiff > 0) {
+        if (salaryDiff !== 0) {
             newHistoryEntries.push({
                 id: 'income_salary_' + Date.now() + '_' + Math.random(),
                 description: 'Salary',
-                amount: salaryDiff,
-                type: 'income',
+                amount: Math.abs(salaryDiff),
+                type: salaryDiff > 0 ? 'income' : 'expense',
                 source: 'Salary',
                 monthIndex: selectedMonth,
                 date: todayStr
             });
         }
-        if (extraDiff > 0) {
+        if (extraDiff !== 0) {
             newHistoryEntries.push({
                 id: 'income_extra_' + Date.now() + '_' + Math.random(),
                 description: 'Extra',
-                amount: extraDiff,
-                type: 'income',
+                amount: Math.abs(extraDiff),
+                type: extraDiff > 0 ? 'income' : 'expense',
                 source: 'Extra',
                 monthIndex: selectedMonth,
                 date: todayStr
             });
         }
-        if (bonusDiff > 0) {
+        if (bonusDiff !== 0) {
             newHistoryEntries.push({
                 id: 'income_bonus_' + Date.now() + '_' + Math.random(),
                 description: 'Bonus',
-                amount: bonusDiff,
-                type: 'income',
+                amount: Math.abs(bonusDiff),
+                type: bonusDiff > 0 ? 'income' : 'expense',
                 source: 'Bonus',
                 monthIndex: selectedMonth,
                 date: todayStr
             });
         }
-        if (othersDiff > 0) {
+        if (othersDiff !== 0) {
             newHistoryEntries.push({
                 id: 'income_others_' + Date.now() + '_' + Math.random(),
                 description: 'Others',
-                amount: othersDiff,
-                type: 'income',
+                amount: Math.abs(othersDiff),
+                type: othersDiff > 0 ? 'income' : 'expense',
                 source: 'Others',
                 monthIndex: selectedMonth,
                 date: todayStr
@@ -1205,6 +1395,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
+        persistStateToLocalStorage();
         updateSummaryCards();
 
         try {
@@ -1218,14 +1409,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             if (newHistoryEntries.length > 0) {
-                await supabaseClient.from(prefix + 'history').insert(newHistoryEntries.map(entry => ({
+                await supabaseClient.from(prefix + 'history').history ? supabaseClient.from(prefix + 'history').insert(newHistoryEntries.map(entry => ({
                     id: entry.id,
                     description: entry.description,
                     amount: entry.amount,
                     type: entry.type,
                     source: entry.source,
                     date: entry.date
-                })));
+                }))) : null;
             }
         } catch (err) {
             console.error('Error saving profile income breakdown:', err);
