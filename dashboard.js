@@ -111,6 +111,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     let monthlyIncomes = {};
     let isEditingIncome = false;
 
+    // Helper to format names/descriptions while preserving acronyms like CC, ATM
+    function formatDescriptionText(rawStr) {
+        if (!rawStr) return '';
+        return rawStr
+            .trim()
+            .split(' ')
+            .map(word => {
+                if (word.length <= 3 && word === word.toUpperCase() && /^[A-Z]+$/.test(word)) {
+                    return word;
+                }
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            })
+            .join(' ');
+    }
+
     // Autosave / Debounce helper to prevent spamming Supabase
     let autosaveTimer = null;
     function triggerAutosave(callback) {
@@ -119,7 +134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (typeof callback === 'function') {
                 await callback();
             }
-        }, 1000); // 1-second autosave delay
+        }, 1000);
     }
 
     function getTodayLocalDateStr() {
@@ -220,7 +235,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             billModalTitle.textContent = 'Edit Bill';
             toggleBillEditDropdownBtn.style.display = 'block';
             billNameInput.readOnly = true;
-            billNameInput.placeholder = '';
+            billNameInput.placeholder = 'Select bill from dropdown...';
             recurrenceSectionWrapper.style.display = 'flex';
             saveBillBtn.textContent = 'Update Bill';
             editingBillId = null;
@@ -449,23 +464,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             totalIncome = (activeInc.salary || 0) + (activeInc.extra || 0) + (activeInc.bonus || 0) + (activeInc.others || 0);
         }
 
+        // Calculate total paid expenses for the selected month from actual transaction history / paid bills
         const totalPaidExpenses = transactions
-            .filter(t => t.type === 'expense')
+            .filter(t => {
+                if (t.type !== 'expense') return false;
+                const txMonth = t.date ? new Date(t.date).getMonth() : currentMonth;
+                return txMonth === selectedMonth;
+            })
             .reduce((sum, t) => sum + parseCurrencyValue(t.amount), 0);
 
-        const filterMonthVal = billsFilterMonth ? billsFilterMonth.value : 'all';
-        let filteredBills = bills;
-        if (filterMonthVal !== 'all') {
-            const targetMonth = parseInt(filterMonthVal);
-            filteredBills = bills.filter(bill => {
-                const billMonth = new Date(bill.dueDate).getMonth();
-                return billMonth === targetMonth;
-            });
-        }
-        const unpaidFilteredBills = filteredBills.filter(b => !b.isPaid);
-        const totalUnpaidBillsAmount = unpaidFilteredBills.reduce((sum, b) => sum + parseCurrencyValue(b.amount), 0);
-
-        const balanceValue = totalIncome - totalUnpaidBillsAmount;
+        const balanceValue = totalIncome - totalPaidExpenses;
         const balanceEl = document.getElementById('totalBalance');
 
         document.getElementById('totalIncome').textContent = `+₱${formatCurrency(totalIncome)}`;
@@ -488,7 +496,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (inputEl) {
             inputEl.addEventListener('input', () => {
                 updateSummaryCards();
-                // Autosave profile income changes instantly with a 1s debounce
                 triggerAutosave(async () => {
                     const selectedMonth = parseInt(incomeMonthSelect.value);
                     const salary = parseCurrencyValue(salaryInput.value);
@@ -519,7 +526,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const getActualExpenseBySource = (categoryName) => {
             return transactions
-                .filter(t => t.type === 'expense' && t.source && t.source.toLowerCase() === categoryName.toLowerCase())
+                .filter(t => {
+                    if (t.type !== 'expense' || !t.source || t.source.toLowerCase() !== categoryName.toLowerCase()) return false;
+                    const txMonth = t.date ? new Date(t.date).getMonth() : currentMonth;
+                    return txMonth === activeMonth;
+                })
                 .reduce((sum, t) => sum + parseCurrencyValue(t.amount), 0);
         };
 
@@ -580,6 +591,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             else if (sourceLower === 'bonus') displaySource = 'Bonus';
             else if (sourceLower === 'others') displaySource = 'Others';
 
+            let amountColor = isInc ? 'var(--accent)' : '#ef4444';
+            let signPrefix = isInc ? '+' : '-';
+
             li.innerHTML = `
                 <div class="bill-info">
                     <div class="bill-name-wrapper">
@@ -589,7 +603,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span class="bill-date">${txDateStr}</span>
                 </div>
                 <div class="bill-actions">
-                    <span class="bill-amount" style="color: ${isInc ? 'var(--accent)' : '#ef4444'}">${isInc ? '+' : '-'}₱${formatCurrency(t.amount)}</span>
+                    <span class="bill-amount" style="color: ${amountColor}">${signPrefix}₱${formatCurrency(t.amount)}</span>
                 </div>
             `;
             fragment.appendChild(li);
@@ -655,7 +669,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadDataFromSupabase() {
         try {
-            // Instant local cache fallback so the UI loads immediately without waiting
             const cachedBills = localStorage.getItem(`cache_bills_${currentAccount}`);
             const cachedTx = localStorage.getItem(`cache_tx_${currentAccount}`);
             const cachedIncomes = localStorage.getItem(`cache_incomes_${currentAccount}`);
@@ -748,7 +761,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            // Sync latest data to localStorage cache
             localStorage.setItem(`cache_bills_${currentAccount}`, JSON.stringify(bills));
             localStorage.setItem(`cache_tx_${currentAccount}`, JSON.stringify(transactions));
             localStorage.setItem(`cache_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
@@ -880,12 +892,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!rawDesc || totalAmt <= 0) return;
 
-        const formattedDesc = rawDesc
-            .toLowerCase()
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-
+        const formattedDesc = formatDescriptionText(rawDesc);
         const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
 
         if (isEditMode) {
@@ -1023,12 +1030,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!rawTypeInput || amount <= 0) return;
 
-        const formattedType = rawTypeInput
-            .toLowerCase()
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-
+        const formattedType = formatDescriptionText(rawTypeInput);
         const transactionType = formattedType.toLowerCase().includes('income') ? 'income' : 'expense';
         const todayStr = getTodayLocalDateStr();
         const uniqueId = 'daily_' + Date.now();
@@ -1194,11 +1196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         monthlyCountRow.classList.remove('active');
         billEntryModal.classList.remove('active');
 
-        const formattedName = rawName
-            .toLowerCase()
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
+        const formattedName = formatDescriptionText(rawName);
 
         try {
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
@@ -1218,17 +1216,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         due_date: startDateStr,
                         recurrence: selectedRecurrence
                     }).eq('id', editingBillId);
-                }
-
-                const matchingTx = transactions.find(t => t.desc.toLowerCase() === formattedName.toLowerCase() && t.source === 'Bill Created');
-                if (matchingTx) {
-                    matchingTx.amount = numericAmount;
-                    matchingTx.date = startDateStr;
-
-                    await supabaseClient.from(prefix + 'history').update({
-                        amount: numericAmount,
-                        date: startDateStr
-                    }).eq('id', matchingTx.id);
                 }
 
                 editingBillId = null;
@@ -1275,27 +1262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     recurrence: newBillDb.recurrence
                 });
 
-                const historyId = 'hist_bill_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-                const newTxDb = {
-                    id: historyId,
-                    description: formattedName,
-                    amount: numericAmount,
-                    type: 'expense',
-                    source: 'Bill Created',
-                    date: dStr
-                };
-
-                transactions.push({
-                    id: newTxDb.id,
-                    desc: newTxDb.description,
-                    amount: newTxDb.amount,
-                    type: newTxDb.type,
-                    source: newTxDb.source,
-                    date: newTxDb.date
-                });
-
                 supabaseClient.from(prefix + 'bills').insert([newBillDb]).then();
-                supabaseClient.from(prefix + 'history').insert([newTxDb]).then();
             }
 
             persistStateToLocalStorage();
@@ -1409,14 +1376,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             if (newHistoryEntries.length > 0) {
-                await supabaseClient.from(prefix + 'history').history ? supabaseClient.from(prefix + 'history').insert(newHistoryEntries.map(entry => ({
+                await supabaseClient.from(prefix + 'history').insert(newHistoryEntries.map(entry => ({
                     id: entry.id,
                     description: entry.description,
                     amount: entry.amount,
                     type: entry.type,
                     source: entry.source,
                     date: entry.date
-                }))) : null;
+                })));
             }
         } catch (err) {
             console.error('Error saving profile income breakdown:', err);
