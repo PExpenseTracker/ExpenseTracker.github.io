@@ -1092,6 +1092,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 loadFormForSelectedMonth();
                 updateSummaryCards();
                 renderBills();
+                renderHistory();
             }
 
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
@@ -1127,7 +1128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (historyRes.data) {
                 transactions = historyRes.data.map(t => ({
                     id: t.id,
-                    desc: t.description,
+                    desc: t.description || t.desc,
                     amount: t.amount,
                     type: t.type,
                     source: t.source,
@@ -1141,19 +1142,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (!existsTx) {
                         transactions.push({
                             id: d.id,
-                            desc: d.description,
+                            desc: d.description || d.desc,
                             amount: d.amount,
-                            type: d.description.toLowerCase().includes('income') ? 'income' : 'expense',
-                            source: d.category,
+                            type: (d.description || d.desc || '').toLowerCase().includes('income') ? 'income' : 'expense',
+                            source: d.category || d.source,
                             date: d.date
                         });
                     }
 
-                    const existsBill = bills.some(b => b.name.toLowerCase() === d.description.toLowerCase() && b.dueDate === d.date);
+                    const existsBill = bills.some(b => b.name.toLowerCase() === (d.description || d.desc || '').toLowerCase() && b.dueDate === d.date);
                     if (!existsBill) {
                         bills.push({
                             id: Date.now() + Math.floor(Math.random() * 100),
-                            name: d.description,
+                            name: d.description || d.desc,
                             amount: d.amount,
                             dueDate: d.date,
                             isPaid: true,
@@ -1191,6 +1192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadFormForSelectedMonth();
             updateSummaryCards();
             renderBills();
+            renderHistory();
         } catch (err) {
             console.error('Error fetching Supabase data:', err);
         }
@@ -1201,6 +1203,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         localStorage.setItem(`cache_tx_${currentAccount}`, JSON.stringify(transactions));
         localStorage.setItem(`cache_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
         localStorage.setItem(`cached_ranges_${currentAccount}`, JSON.stringify(paycheckRanges));
+    }
+
+    function renderHistory() {
+        const historyListEl = document.getElementById('historyList');
+        if (!historyListEl) return;
+
+        historyListEl.innerHTML = '';
+
+        if (transactions.length === 0) {
+            historyListEl.innerHTML = '<li class="empty-state">No transaction history found.</li>';
+            return;
+        }
+
+        const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+        const fragment = document.createDocumentFragment();
+
+        sortedTx.forEach(tx => {
+            const li = document.createElement('li');
+            li.className = `history-item-row ${tx.type || 'expense'}`;
+
+            const [year, month, day] = (tx.date || '').split('-');
+            const formattedDate = (year && month && day) ? `${month}/${day}/${year}` : (tx.date || '');
+            const formattedAmount = formatCurrency(tx.amount);
+            const sign = tx.type === 'income' ? '+' : '-';
+            const colorClass = tx.type === 'income' ? 'income-amount' : 'expense-amount';
+
+            li.innerHTML = `
+                <div class="history-info">
+                    <span class="history-desc">${tx.desc || tx.description || 'Transaction'}</span>
+                    <span class="history-date">${formattedDate} ${tx.source ? `• ${tx.source}` : ''}</span>
+                </div>
+                <div class="history-amount ${colorClass}">
+                    ${sign}₱${formattedAmount}
+                </div>
+            `;
+            fragment.appendChild(li);
+        });
+
+        historyListEl.appendChild(fragment);
     }
 
     function calculateDailyInterest() {
@@ -1242,6 +1283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await loadDataFromSupabase();
     calculateDailyInterest();
+    renderHistory(); // Force immediate history draw on startup
 
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1254,6 +1296,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.classList.add('active');
             document.getElementById(targetViewId).classList.add('active');
             tabTitle.textContent = targetTitle;
+            
+            // Always render history whenever the history view/tab is selected
+            if (targetViewId === 'viewHistory' || targetTitle === 'History' || (targetViewId && targetViewId.toLowerCase().includes('history'))) {
+                renderHistory();
+            }
         });
     });
 
@@ -1322,6 +1369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             persistStateToLocalStorage();
             updateSummaryCards();
             renderBills();
+            renderHistory();
             return;
         }
 
@@ -1405,9 +1453,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             persistStateToLocalStorage();
             updateSummaryCards();
             renderBills();
+            renderHistory();
 
             await supabaseClient.from(prefix + 'entries').insert([newTxDb]);
             await supabaseClient.from(prefix + 'history').insert([newTxDb]);
+
         } catch (err) {
             console.error('Error in Quick Entry submission:', err);
             showAppError('Failed to save transaction. Please check your connection.');
@@ -1475,6 +1525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             persistStateToLocalStorage();
             updateSummaryCards();
             renderBills();
+            renderHistory();
 
             await supabaseClient.from(prefix + 'daily').insert([{
                 id: uniqueId,
@@ -1498,6 +1549,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         persistStateToLocalStorage();
         renderBills();
         updateSummaryCards();
+        renderHistory();
         const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
         await supabaseClient.from(prefix + 'bills').delete().eq('id', billId);
     };
@@ -1640,6 +1692,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 persistStateToLocalStorage();
                 updateSummaryCards();
                 renderBills();
+                renderHistory();
 
                 billForm.reset();
                 if (billDueDateInput) billDueDateInput.value = getTodayLocalDateStr();
@@ -1699,6 +1752,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             persistStateToLocalStorage();
             updateSummaryCards();
             renderBills();
+            renderHistory();
 
             billForm.reset();
             if (billDueDateInput) billDueDateInput.value = getTodayLocalDateStr();
@@ -1712,7 +1766,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (saveBillBtn) {
                 saveBillBtn.disabled = false;
                 saveBillBtn.style.opacity = '1';
-                saveBillBtn.style.cursor = 'not-allowed';
+                saveBillBtn.style.cursor = 'pointer';
             }
         }
     });
@@ -1753,6 +1807,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         persistStateToLocalStorage();
         updateSummaryCards();
         renderBills();
+        renderHistory();
 
         try {
             await supabaseClient.from(prefix + 'profile_incomes').upsert({
