@@ -324,7 +324,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 addDynamicIncomeFieldUI(categoryName);
                 updateIncomeDropdownOptions();
 
-                // Immediately sync current profile state to Supabase so the new breakdown column/key is saved
                 await saveCurrentProfileToSupabase();
             }
 
@@ -491,7 +490,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             billModalTitle.textContent = 'Edit Bill';
             toggleBillEditDropdownBtn.style.display = 'block';
             billNameInput.readOnly = true;
-            billNameInput.placeholder = '';
+            billNameInput.placeholder = 'Select bill from dropdown...';
             recurrenceSectionWrapper.style.display = 'flex';
             saveBillBtn.textContent = 'Update Bill';
             editingBillId = null;
