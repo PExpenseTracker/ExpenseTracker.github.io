@@ -508,11 +508,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (isEditMode) {
             toBePaidModalTitle.textContent = 'Edit To Be Paid';
             payBillBtn.textContent = 'Update Transaction';
-            setQuickTxFieldsLock(true); // Grey out Date & Amount in Edit Mode
+            setQuickTxFieldsLock(true);
         } else {
             toBePaidModalTitle.textContent = 'To Be Paid';
             payBillBtn.textContent = 'Pay Bill';
-            setQuickTxFieldsLock(false); // Unlocked for regular bill payments
+            setQuickTxFieldsLock(false);
         }
         billTxModal.classList.add('active');
     });
@@ -620,7 +620,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAmountInput.value = formatCurrency(b.amount);
                     if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
                     payBillBtn.textContent = 'Update Transaction';
-                    setQuickTxFieldsLock(true); // Grey out Date & Amount in Edit Mode
+                    setQuickTxFieldsLock(true);
                 } else {
                     editingTxId = b.id;
                     descInput.value = b.name;
@@ -1305,11 +1305,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     matchingBill.dueDate = quickDueDateInput.value;
                 }
 
-                supabaseClient.from(prefix + 'bills').update({
+                await supabaseClient.from(prefix + 'bills').update({
                     name: formattedDesc,
                     amount: totalAmt,
                     due_date: matchingBill.dueDate
-                }).eq('id', matchingBill.id).then();
+                }).eq('id', matchingBill.id);
             }
 
             editingTxId = null;
@@ -1398,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (matchingBill) {
                 matchingBill.isPaid = true;
                 matchingBill.amount = totalAmt;
-                supabaseClient.from(prefix + 'bills').update({ is_paid: true, amount: totalAmt }).eq('id', matchingBill.id).then();
+                await supabaseClient.from(prefix + 'bills').update({ is_paid: true, amount: totalAmt }).eq('id', matchingBill.id);
             }
             editingTxId = null;
 
@@ -1406,8 +1406,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateSummaryCards();
             renderBills();
 
-            supabaseClient.from(prefix + 'entries').insert([newTxDb]).then();
-            supabaseClient.from(prefix + 'history').insert([newTxDb]).then();
+            await supabaseClient.from(prefix + 'entries').insert([newTxDb]);
+            await supabaseClient.from(prefix + 'history').insert([newTxDb]);
         } catch (err) {
             console.error('Error in Quick Entry submission:', err);
             showAppError('Failed to save transaction. Please check your connection.');
@@ -1476,17 +1476,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateSummaryCards();
             renderBills();
 
-            supabaseClient.from(prefix + 'daily').insert([{
+            await supabaseClient.from(prefix + 'daily').insert([{
                 id: uniqueId,
                 description: formattedType,
                 amount: amount,
                 category: category,
                 date: todayStr
-            }]).then();
+            }]);
 
-            supabaseClient.from(prefix + 'entries').insert([newTxDb]).then();
-            supabaseClient.from(prefix + 'history').insert([newTxDb]).then();
-            supabaseClient.from(prefix + 'bills').insert([newBillDb]).then();
+            await supabaseClient.from(prefix + 'entries').insert([newTxDb]);
+            await supabaseClient.from(prefix + 'history').insert([newTxDb]);
+            await supabaseClient.from(prefix + 'bills').insert([newBillDb]);
         } catch (err) {
             console.error('Error saving Daily transaction:', err);
             showAppError('Failed to save daily transaction.');
@@ -1499,7 +1499,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderBills();
         updateSummaryCards();
         const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
-        supabaseClient.from(prefix + 'bills').delete().eq('id', billId).then();
+        await supabaseClient.from(prefix + 'bills').delete().eq('id', billId);
     };
 
     function renderBills() {
@@ -1712,7 +1712,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (saveBillBtn) {
                 saveBillBtn.disabled = false;
                 saveBillBtn.style.opacity = '1';
-                saveBillBtn.style.cursor = 'pointer';
+                saveBillBtn.style.cursor = 'not-allowed';
             }
         }
     });
