@@ -370,8 +370,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             fieldRow.innerHTML = `
                 <span class="drag-handle" title="Drag to reorder">☰</span>
                 <label for="income_${fieldKey}" style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${categoryName}</label>
-                <input type="text" id="income_${fieldKey}" data-category="${categoryName}" class="currency-input income-dynamic-input" placeholder="0.00" autocomplete="off" ${isEditingIncome ? '' : 'disabled'}>
-                <div id="balance_income_${fieldKey}" class="income-balance-display" title="Remaining Balance">₱0.00</div>
+                <input type="text" id="income_${fieldKey}" data-category="${categoryName}" class="currency-input income-dynamic-input" placeholder="" autocomplete="off" ${isEditingIncome ? '' : 'disabled'}>
+                <div id="balance_income_${fieldKey}" class="income-balance-display" title="Remaining Balance"></div>
             `;
             dynamicIncomeFieldsContainer.appendChild(fieldRow);
 
@@ -438,9 +438,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             homeProgressRow.innerHTML = `
                 <span class="progress-label">${categoryName}</span>
                 <div class="progress-values">
-                    <span id="home_${fieldKey}_Actual">₱0.00</span>
+                    <span id="home_${fieldKey}_Actual"></span>
                     <span class="progress-slash">/</span>
-                    <span id="home_${fieldKey}_Budget">₱0.00</span>
+                    <span id="home_${fieldKey}_Budget"></span>
                 </div>
             `;
             homeIncomeProgressList.appendChild(homeProgressRow);
@@ -476,7 +476,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             billModalTitle.textContent = 'Edit Bill';
             toggleBillEditDropdownBtn.style.display = 'block';
             billNameInput.readOnly = true;
-            billNameInput.placeholder = 'Select bill from dropdown...';
+            billNameInput.placeholder = '';
             recurrenceSectionWrapper.style.display = 'flex';
             saveBillBtn.textContent = 'Update Bill';
             editingBillId = null;
@@ -557,7 +557,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (splitAmountCheck.checked) {
                 const amt1 = parseCurrencyValue(amount1Input.value);
                 const rem = Math.max(0, total - amt1);
-                amount2Input.value = rem > 0 ? formatCurrency(rem) : '0.00';
+                amount2Input.value = rem > 0 ? formatCurrency(rem) : '';
             }
         });
     }
@@ -570,7 +570,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const amt1 = parseCurrencyValue(amount1Input.value) || total;
                 amount1Input.value = amt1 > 0 ? formatCurrency(amt1) : '';
                 const rem = Math.max(0, total - amt1);
-                amount2Input.value = rem > 0 ? formatCurrency(rem) : '0.00';
+                amount2Input.value = rem > 0 ? formatCurrency(rem) : '';
             } else {
                 amount2Row.classList.remove('active');
                 amount1Input.value = total > 0 ? formatCurrency(total) : '';
@@ -627,7 +627,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAmountInput.value = formatCurrency(b.amount);
                     amount1Input.value = formatCurrency(b.amount);
                     if (splitAmountCheck.checked) {
-                        amount2Input.value = '0.00';
+                        amount2Input.value = '';
                     }
                     if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
                     setQuickTxFieldsLock(true);
