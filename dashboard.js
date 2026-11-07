@@ -383,7 +383,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             setupCurrencyFormatting(newEl);
 
             newEl.addEventListener('input', () => {
+                // Instantly update UI on keystroke
                 updateSummaryCards();
+                updateIncomeCategoryBalances();
+                updateHomeIncomeProgress();
+
+                // Background database sync
                 triggerAutosave(async () => {
                     await saveCurrentProfileToSupabase();
                 });
@@ -454,6 +459,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         paycheckRanges[selectedMonth][paycheckType] = { startDate: startDateVal, endDate: endDateVal };
 
         persistStateToLocalStorage();
+        updateSummaryCards();
+        updateIncomeCategoryBalances();
+        updateHomeIncomeProgress();
 
         const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
         try {
