@@ -43,15 +43,15 @@
                 <div class="summary-cards">
                     <div class="summary-card">
                         <span class="card-label">Income</span>
-                        <span class="card-amount positive" id="totalIncome">+₱0.00</span>
+                        <span class="card-amount positive" id="totalIncome"></span>
                     </div>
                     <div class="summary-card">
                         <span class="card-label">Expenses</span>
-                        <span class="card-amount negative" id="totalExpenses">-₱0.00</span>
+                        <span class="card-amount negative" id="totalExpenses"></span>
                     </div>
                     <div class="summary-card">
                         <span class="card-label">Balance</span>
-                        <span class="card-amount" id="totalBalance">₱0.00</span>
+                        <span class="card-amount" id="totalBalance"></span>
                     </div>
                 </div>
 
@@ -107,7 +107,7 @@
                     </div>
                     <div id="billsTotalFooter" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f1f5f9; border-top: 1.5px solid var(--border-light); border-radius: 8px; margin-top: 8px; font-weight: 800; font-size: 12px;">
                         <span>Total Bill Amount</span>
-                        <span id="billsTotalAmountText" style="color: #ef4444;">₱0.00</span>
+                        <span id="billsTotalAmountText" style="color: #ef4444;"></span>
                     </div>
                 </div>
             </div>
@@ -235,7 +235,7 @@
                         <!-- Dynamic Container for All Custom Income Sources -->
                         <div id="dynamicIncomeFieldsContainer" style="display: flex; flex-direction: column; gap: 10px;"></div>
 
-                        <button type="submit" class="add-btn full-width" id="saveIncomeBtn" style="display: none;">Save Income & Dates</button>
+                        <button type="submit" class="add-btn full-width" id="saveIncomeBtn" style="display: none;">Save</button>
                     </form>
                 </div>
             </div>
@@ -293,7 +293,7 @@
                     </div>
                     <div class="form-row-horizontal">
                         <label for="billAmount">Amount</label>
-                        <input type="text" id="billAmount" class="currency-input" placeholder="0.00" autocomplete="off" required>
+                        <input type="text" id="billAmount" class="currency-input" placeholder="" autocomplete="off" required>
                     </div>
                     <div class="form-row-horizontal">
                         <label for="billDueDate">Date</label>
@@ -352,7 +352,7 @@
 
                     <div class="form-row-horizontal">
                         <label for="amount">Total</label>
-                        <input type="text" id="amount" class="currency-input" placeholder="0.00" autocomplete="off">
+                        <input type="text" id="amount" class="currency-input" placeholder="" autocomplete="off">
                     </div>
 
                     <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;" id="splitContainerWrapper">
@@ -365,7 +365,7 @@
                             <label for="deductSource1">Deduct 1</label>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
                                 <select id="deductSource1" class="filter-select" style="height: 32px;"></select>
-                                <input type="text" id="amount1" class="currency-input" placeholder="0.00" autocomplete="off">
+                                <input type="text" id="amount1" class="currency-input" placeholder="" autocomplete="off">
                             </div>
                         </div>
 
@@ -373,7 +373,7 @@
                             <label for="deductSource2">Deduct 2</label>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
                                 <select id="deductSource2" class="filter-select" style="height: 32px;"></select>
-                                <input type="text" id="amount2" class="currency-input" placeholder="0.00" autocomplete="off" disabled style="background: #f1f5f9; color: var(--text-muted);">
+                                <input type="text" id="amount2" class="currency-input" placeholder="" autocomplete="off" disabled style="background: #f1f5f9; color: var(--text-muted);">
                             </div>
                         </div>
                     </div>
@@ -400,7 +400,7 @@
 
                     <div class="form-row-horizontal">
                         <label for="dailyAmount">Amount</label>
-                        <input type="text" id="dailyAmount" class="currency-input" placeholder="0.00" autocomplete="off" required>
+                        <input type="text" id="dailyAmount" class="currency-input" placeholder="" autocomplete="off" required>
                     </div>
 
                     <div class="form-row-horizontal">
@@ -436,7 +436,7 @@
                 <div class="form-column" style="display: flex; flex-direction: column; gap: 10px;">
                     <div class="form-row-horizontal">
                         <label for="customIncomeSourceName">Type</label>
-                        <input type="text" id="customIncomeSourceName" placeholder="e.g. Maribank" autocomplete="off" required style="width: 100%;">
+                        <input type="text" id="customIncomeSourceName" placeholder="" autocomplete="off" required style="width: 100%;">
                     </div>
 
                     <!-- Toggle Checkbox for Daily Interest -->
@@ -449,15 +449,15 @@
                     <div id="interestFieldsSlot" style="display: none; flex-direction: column; gap: 8px; padding: 8px; background: #f8fafc; border: 1px dashed var(--border-light); border-radius: 6px;">
                         <div class="form-row-horizontal">
                             <label for="interestRate">Interest %</label>
-                            <input type="number" step="0.01" id="interestRate" placeholder="e.g. 3.0" value="3.0">
+                            <input type="number" step="0.01" id="interestRate" placeholder="" value="">
                         </div>
                         <div class="form-row-horizontal">
                             <label for="interestPA">P.A. (Days)</label>
-                            <input type="number" id="interestPA" placeholder="e.g. 365" value="365">
+                            <input type="number" id="interestPA" placeholder="" value="">
                         </div>
                         <div class="form-row-horizontal">
                             <label for="interestWHTax">WH Tax %</label>
-                            <input type="number" step="0.01" id="interestWHTax" placeholder="e.g. 20" value="20">
+                            <input type="number" step="0.01" id="interestWHTax" placeholder="" value="">
                         </div>
                     </div>
 
