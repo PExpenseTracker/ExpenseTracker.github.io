@@ -508,11 +508,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (isEditMode) {
             toBePaidModalTitle.textContent = 'Edit To Be Paid';
             payBillBtn.textContent = 'Update Transaction';
-            setQuickTxFieldsLock(false);
+            setQuickTxFieldsLock(true); // Grey out Date & Amount in Edit Mode
         } else {
             toBePaidModalTitle.textContent = 'To Be Paid';
             payBillBtn.textContent = 'Pay Bill';
-            setQuickTxFieldsLock(true);
+            setQuickTxFieldsLock(false); // Unlocked for normal bill payments
         }
         billTxModal.classList.add('active');
     });
@@ -620,7 +620,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAmountInput.value = formatCurrency(b.amount);
                     if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
                     payBillBtn.textContent = 'Update Transaction';
-                    setQuickTxFieldsLock(false);
+                    setQuickTxFieldsLock(true); // Grey out Date & Amount in Edit Mode
                 } else {
                     editingTxId = b.id;
                     descInput.value = b.name;
@@ -630,7 +630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         amount2Input.value = '';
                     }
                     if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
-                    setQuickTxFieldsLock(true);
+                    setQuickTxFieldsLock(false);
                 }
                 quickBillsDropdown.style.display = 'none';
             });
@@ -1057,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             transactions = [];
             monthlyIncomes = {};
             paycheckRanges = {};
-            customIncomeCategories = [];
+            customIncomeCategories = []; 
             
             if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
             if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
@@ -1560,7 +1560,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const formattedAmount = formatCurrency(bill.amount);
             const displayRecurrence = recurrenceLabels[bill.recurrence] || bill.recurrence;
 
-            // Display counter next to date if it's a monthly recurrence with a counter
             let dateDisplayStr = `Due: ${formattedDate}`;
             if (bill.recurrence === 'monthly' && bill.counter) {
                 dateDisplayStr = `Due: ${formattedDate} | ${bill.counter}`;
