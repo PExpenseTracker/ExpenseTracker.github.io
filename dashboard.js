@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let transactions = [];
     let monthlyIncomes = {};
     let paycheckRanges = {};
-    let customIncomeCategories = []; 
+    let customIncomeCategories = ['Salary', 'Maya', 'Seabank', 'Bonus', 'Extra', 'Others']; 
     let isEditingIncome = false;
 
     function formatDescriptionText(rawStr) {
@@ -300,7 +300,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (customIncomeSourceForm) {
-        customIncomeSourceForm.addEventListener('submit', (e) => {
+        customIncomeSourceForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const rawName = customIncomeSourceNameInput.value.trim();
             if (!rawName) return;
@@ -319,9 +319,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const newCatObj = interestConfig ? { name: categoryName, interest: interestConfig } : categoryName;
                 customIncomeCategories.push(newCatObj);
 
-                addDynamicIncomeFieldUI(categoryName);
                 localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
+                
+                addDynamicIncomeFieldUI(categoryName);
                 updateIncomeDropdownOptions();
+
+                // Immediately sync current profile state to Supabase so the new breakdown column/key is saved
+                await saveCurrentProfileToSupabase();
             }
 
             if (incomeSourceModal) incomeSourceModal.classList.remove('active');
@@ -334,7 +338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (deleteIncomeSourceForm) {
-        deleteIncomeSourceForm.addEventListener('submit', (e) => {
+        deleteIncomeSourceForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const categoryToRemove = deleteIncomeSourceSelect.value;
             if (!categoryToRemove) return;
@@ -352,6 +356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateIncomeDropdownOptions();
             if (deleteIncomeSourceModal) deleteIncomeSourceModal.classList.remove('active');
 
+            await saveCurrentProfileToSupabase();
             loadFormForSelectedMonth();
             updateSummaryCards();
         });
@@ -370,8 +375,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             fieldRow.innerHTML = `
                 <span class="drag-handle" title="Drag to reorder">☰</span>
                 <label for="income_${fieldKey}" style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${categoryName}</label>
-                <input type="text" id="income_${fieldKey}" data-category="${categoryName}" class="currency-input income-dynamic-input" placeholder="" autocomplete="off" ${isEditingIncome ? '' : 'disabled'}>
-                <div id="balance_income_${fieldKey}" class="income-balance-display" title="Remaining Balance"></div>
+                <input type="text" id="income_${fieldKey}" data-category="${categoryName}" class="currency-input income-dynamic-input" placeholder="0.00" autocomplete="off" ${isEditingIncome ? '' : 'disabled'}>
+                <div id="balance_income_${fieldKey}" class="income-balance-display" title="Remaining Balance">₱0.00</div>
             `;
             dynamicIncomeFieldsContainer.appendChild(fieldRow);
 
@@ -381,26 +386,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             newEl.addEventListener('input', () => {
                 updateSummaryCards();
                 triggerAutosave(async () => {
-                    const selectedMonth = parseInt(incomeMonthSelect.value);
-                    const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
-                    if (paycheckType === 'Total Paycheck') return;
-
-                    if (!monthlyIncomes[selectedMonth]) monthlyIncomes[selectedMonth] = {};
-                    if (!monthlyIncomes[selectedMonth][paycheckType]) monthlyIncomes[selectedMonth][paycheckType] = {};
-
-                    monthlyIncomes[selectedMonth][paycheckType][fieldKey] = parseCurrencyValue(newEl.value);
-
-                    localStorage.setItem(`cached_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
-
-                    const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
-                    await supabaseClient.from(prefix + 'profile_incomes').upsert({
-                        month_index: selectedMonth,
-                        paycheck_type: paycheckType,
-                        category_data: monthlyIncomes[selectedMonth][paycheckType],
-                        start_date: rangeStartDateInput ? rangeStartDateInput.value : null,
-                        end_date: rangeEndDateInput ? rangeEndDateInput.value : null,
-                        updated_at: new Date()
-                    });
+                    await saveCurrentProfileToSupabase();
                 });
             });
 
@@ -438,12 +424,50 @@ document.addEventListener('DOMContentLoaded', async () => {
             homeProgressRow.innerHTML = `
                 <span class="progress-label">${categoryName}</span>
                 <div class="progress-values">
-                    <span id="home_${fieldKey}_Actual"></span>
+                    <span id="home_${fieldKey}_Actual">₱0.00</span>
                     <span class="progress-slash">/</span>
-                    <span id="home_${fieldKey}_Budget"></span>
+                    <span id="home_${fieldKey}_Budget">₱0.00</span>
                 </div>
             `;
             homeIncomeProgressList.appendChild(homeProgressRow);
+        }
+    }
+
+    async function saveCurrentProfileToSupabase() {
+        const selectedMonth = parseInt(incomeMonthSelect.value);
+        const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
+        if (paycheckType === 'Total Paycheck') return;
+
+        const categoryData = {};
+        const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
+        dynamicInputs.forEach(inp => {
+            const key = inp.id.replace('income_', '');
+            categoryData[key] = parseCurrencyValue(inp.value);
+        });
+
+        if (!monthlyIncomes[selectedMonth]) monthlyIncomes[selectedMonth] = {};
+        monthlyIncomes[selectedMonth][paycheckType] = categoryData;
+
+        const startDateVal = rangeStartDateInput ? rangeStartDateInput.value : null;
+        const endDateVal = rangeEndDateInput ? rangeEndDateInput.value : null;
+
+        if (!paycheckRanges[selectedMonth]) paycheckRanges[selectedMonth] = {};
+        paycheckRanges[selectedMonth][paycheckType] = { startDate: startDateVal, endDate: endDateVal };
+
+        persistStateToLocalStorage();
+
+        const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+        try {
+            await supabaseClient.from(prefix + 'profile_incomes').upsert({
+                month_index: selectedMonth,
+                paycheck_type: paycheckType,
+                category_data: categoryData,
+                start_date: startDateVal,
+                end_date: endDateVal,
+                updated_at: new Date()
+            }, { onConflict: 'month_index,paycheck_type' });
+        } catch (err) {
+            console.error('Error syncing profile to Supabase:', err);
         }
     }
 
@@ -457,15 +481,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         customIncomeCategories = newOrder;
         localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
-        
-        rows.forEach(row => {
-            const cat = row.dataset.category;
-            const fieldKey = cat.toLowerCase().replace(/\s+/g, '_');
-            const homeRow = document.getElementById(`home_progress_${fieldKey}`);
-            if (homeRow) {
-                homeIncomeProgressList.appendChild(homeRow);
-            }
-        });
     }
 
     openBillEntryModalBtn.addEventListener('click', () => {
@@ -476,7 +491,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             billModalTitle.textContent = 'Edit Bill';
             toggleBillEditDropdownBtn.style.display = 'block';
             billNameInput.readOnly = true;
-            billNameInput.placeholder = '';
+            billNameInput.placeholder = 'Select bill from dropdown...';
             recurrenceSectionWrapper.style.display = 'flex';
             saveBillBtn.textContent = 'Update Bill';
             editingBillId = null;
@@ -493,12 +508,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     function setQuickTxFieldsLock(disabled) {
-        if (quickDueDateInput) {
-            quickDueDateInput.disabled = disabled;
-        }
-        if (totalAmountInput) {
-            totalAmountInput.disabled = disabled;
-        }
+        if (quickDueDateInput) quickDueDateInput.disabled = disabled;
+        if (totalAmountInput) totalAmountInput.disabled = disabled;
     }
 
     openBillTxModalBtn.addEventListener('click', () => {
@@ -557,7 +568,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (splitAmountCheck.checked) {
                 const amt1 = parseCurrencyValue(amount1Input.value);
                 const rem = Math.max(0, total - amt1);
-                amount2Input.value = rem > 0 ? formatCurrency(rem) : '';
+                amount2Input.value = rem > 0 ? formatCurrency(rem) : '0.00';
             }
         });
     }
@@ -570,7 +581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const amt1 = parseCurrencyValue(amount1Input.value) || total;
                 amount1Input.value = amt1 > 0 ? formatCurrency(amt1) : '';
                 const rem = Math.max(0, total - amt1);
-                amount2Input.value = rem > 0 ? formatCurrency(rem) : '';
+                amount2Input.value = rem > 0 ? formatCurrency(rem) : '0.00';
             } else {
                 amount2Row.classList.remove('active');
                 amount1Input.value = total > 0 ? formatCurrency(total) : '';
@@ -627,7 +638,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAmountInput.value = formatCurrency(b.amount);
                     amount1Input.value = formatCurrency(b.amount);
                     if (splitAmountCheck.checked) {
-                        amount2Input.value = '';
+                        amount2Input.value = '0.00';
                     }
                     if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
                     setQuickTxFieldsLock(true);
@@ -719,7 +730,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
 
         if (paycheckType === 'Total Paycheck') {
-            const types = ['1st Paycheck', '2nd Paycheck'];
+            const types = ['1st Paycheck', '2nd Paycheck', 'Monthly Paycheck'];
             let sum = 0;
             types.forEach(type => {
                 const entry = mData[type] || {};
@@ -793,32 +804,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (rangeStartDateInput && rangeEndDateInput) {
         [rangeStartDateInput, rangeEndDateInput].forEach(dateInput => {
-            dateInput.addEventListener('change', () => {
-                const selectedMonth = parseInt(incomeMonthSelect.value);
-                const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
-                if (paycheckType === 'Total Paycheck') return;
-
-                if (!paycheckRanges[selectedMonth]) paycheckRanges[selectedMonth] = {};
-                paycheckRanges[selectedMonth][paycheckType] = {
-                    startDate: rangeStartDateInput.value,
-                    endDate: rangeEndDateInput.value
-                };
-
-                localStorage.setItem(`cached_ranges_${currentAccount}`, JSON.stringify(paycheckRanges));
+            dateInput.addEventListener('change', async () => {
+                await saveCurrentProfileToSupabase();
                 updateSummaryCards();
                 renderBills();
-
-                triggerAutosave(async () => {
-                    const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
-                    await supabaseClient.from(prefix + 'profile_incomes').upsert({
-                        month_index: selectedMonth,
-                        paycheck_type: paycheckType,
-                        category_data: monthlyIncomes[selectedMonth]?.[paycheckType] || {},
-                        start_date: rangeStartDateInput.value,
-                        end_date: rangeEndDateInput.value,
-                        updated_at: new Date()
-                    });
-                });
             });
         });
     }
@@ -948,7 +937,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (paycheckType === 'Total Paycheck') {
-            const types = ['1st Paycheck', '2nd Paycheck'];
+            const types = ['1st Paycheck', '2nd Paycheck', 'Monthly Paycheck'];
             let dynamicSums = {};
 
             types.forEach(t => {
@@ -980,7 +969,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         let data = monthlyIncomes[selectedMonth][paycheckType];
-
         if (!data) {
             data = {};
             monthlyIncomes[selectedMonth][paycheckType] = data;
@@ -989,7 +977,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
         dynamicInputs.forEach(inp => {
             const key = inp.id.replace('income_', '');
-            inp.value = data[key] ? formatCurrency(data[key]) : '';
+            inp.value = data[key] !== undefined ? formatCurrency(data[key]) : '';
         });
 
         setIncomeInputsEditable(false);
@@ -1057,43 +1045,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             transactions = [];
             monthlyIncomes = {};
             paycheckRanges = {};
-            customIncomeCategories = [];
             
-            if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
-            if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
-
             await loadDataFromSupabase();
         });
     }
 
     async function loadDataFromSupabase() {
         try {
-            const cachedBills = localStorage.getItem(`cache_bills_${currentAccount}`);
-            const cachedTx = localStorage.getItem(`cache_tx_${currentAccount}`);
-            const cachedIncomes = localStorage.getItem(`cache_incomes_${currentAccount}`);
-            const cachedRanges = localStorage.getItem(`cached_ranges_${currentAccount}`);
-            const cachedCats = localStorage.getItem(`custom_categories_${currentAccount}`);
-
-            if (cachedCats) {
-                customIncomeCategories = JSON.parse(cachedCats);
-            }
-
-            customIncomeCategories.forEach(cat => {
-                addDynamicIncomeFieldUI(getCategoryName(cat));
-            });
-            updateIncomeDropdownOptions();
-
-            if (cachedBills) bills = JSON.parse(cachedBills);
-            if (cachedTx) transactions = JSON.parse(cachedTx);
-            if (cachedIncomes) monthlyIncomes = JSON.parse(cachedIncomes);
-            if (cachedRanges) paycheckRanges = JSON.parse(cachedRanges);
-
-            if (cachedBills || cachedTx || cachedIncomes) {
-                loadFormForSelectedMonth();
-                updateSummaryCards();
-                renderBills();
-            }
-
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
             const billsTable = prefix + 'bills';
             const historyTable = prefix + 'history';
@@ -1111,6 +1069,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             transactions = [];
             monthlyIncomes = {};
             paycheckRanges = {};
+            let discoveredCategories = new Set(['Salary', 'Maya', 'Seabank', 'Bonus', 'Extra', 'Others']);
 
             if (billsRes.data) {
                 bills = billsRes.data.map(b => ({
@@ -1148,19 +1107,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             date: d.date
                         });
                     }
-
-                    const existsBill = bills.some(b => b.name.toLowerCase() === d.description.toLowerCase() && b.dueDate === d.date);
-                    if (!existsBill) {
-                        bills.push({
-                            id: Date.now() + Math.floor(Math.random() * 100),
-                            name: d.description,
-                            amount: d.amount,
-                            dueDate: d.date,
-                            isPaid: true,
-                            recurrence: 'one-time',
-                            counter: null
-                        });
-                    }
                 });
             }
 
@@ -1172,8 +1118,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (!paycheckRanges[mIdx]) paycheckRanges[mIdx] = {};
                     
                     const catData = row.category_data || {};
-
                     monthlyIncomes[mIdx][pType] = catData;
+
+                    Object.keys(catData).forEach(key => {
+                        const formattedName = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                        discoveredCategories.add(formattedName);
+                    });
+
                     if (row.start_date || row.end_date) {
                         paycheckRanges[mIdx][pType] = {
                             startDate: row.start_date,
@@ -1183,11 +1134,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            localStorage.setItem(`cache_bills_${currentAccount}`, JSON.stringify(bills));
-            localStorage.setItem(`cache_tx_${currentAccount}`, JSON.stringify(transactions));
-            localStorage.setItem(`cache_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
-            localStorage.setItem(`cached_ranges_${currentAccount}`, JSON.stringify(paycheckRanges));
+            const cachedCats = localStorage.getItem(`custom_categories_${currentAccount}`);
+            if (cachedCats) {
+                customIncomeCategories = JSON.parse(cachedCats);
+            } else {
+                customIncomeCategories = Array.from(discoveredCategories);
+                localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
+            }
 
+            if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
+            if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
+
+            customIncomeCategories.forEach(cat => {
+                addDynamicIncomeFieldUI(getCategoryName(cat));
+            });
+            updateIncomeDropdownOptions();
+
+            persistStateToLocalStorage();
             loadFormForSelectedMonth();
             updateSummaryCards();
             renderBills();
@@ -1203,45 +1166,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         localStorage.setItem(`cached_ranges_${currentAccount}`, JSON.stringify(paycheckRanges));
     }
 
-    function calculateDailyInterest() {
-        const selectedMonth = parseInt(incomeMonthSelect.value);
-        const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
-        if (paycheckType === 'Total Paycheck') return;
-
-        customIncomeCategories.forEach(cat => {
-            if (typeof cat === 'object' && cat !== null && cat.interest) {
-                const fieldKey = cat.name.toLowerCase().replace(/\s+/g, '_');
-                const inputEl = document.getElementById(`income_${fieldKey}`);
-                const balanceEl = document.getElementById(`balance_income_${fieldKey}`);
-
-                if (inputEl && balanceEl) {
-                    const currentBalance = parseCurrencyValue(balanceEl.textContent);
-
-                    if (currentBalance > 0) {
-                        const rateDecimal = cat.interest.rate / 100;
-                        const whTaxDecimal = cat.interest.whtax / 100;
-
-                        const grossDailyInterest = (currentBalance * rateDecimal) / cat.interest.pa;
-                        const netTax = grossDailyInterest * whTaxDecimal;
-                        const netDailyEarned = grossDailyInterest - netTax;
-
-                        const currentAmount = parseCurrencyValue(inputEl.value);
-                        const newTotalAmount = currentAmount + netDailyEarned;
-
-                        inputEl.value = formatCurrency(newTotalAmount);
-
-                        if (!monthlyIncomes[selectedMonth]) monthlyIncomes[selectedMonth] = {};
-                        if (!monthlyIncomes[selectedMonth][paycheckType]) monthlyIncomes[selectedMonth][paycheckType] = {};
-                        
-                        monthlyIncomes[selectedMonth][paycheckType][fieldKey] = newTotalAmount;
-                    }
-                }
-            }
-        });
-    }
-
     await loadDataFromSupabase();
-    calculateDailyInterest();
 
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1560,7 +1485,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const formattedAmount = formatCurrency(bill.amount);
             const displayRecurrence = recurrenceLabels[bill.recurrence] || bill.recurrence;
 
-            // Display counter next to date if it's a monthly recurrence with a counter
             let dateDisplayStr = `Due: ${formattedDate}`;
             if (bill.recurrence === 'monthly' && bill.counter) {
                 dateDisplayStr = `Due: ${formattedDate} | ${bill.counter}`;
@@ -1622,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     existingBill.dueDate = startDateStr;
                     existingBill.recurrence = selectedRecurrence;
                     if (selectedRecurrence === 'monthly') {
-                        existingBill.counter = existingBill.counter || `1 of ${monthsCount}`;
+                        existingBill.counter = existingBill.counter || `1 / ${monthsCount}`;
                     } else {
                         existingBill.counter = null;
                     }
@@ -1681,7 +1605,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     id: newBillDb.id,
                     name: newBillDb.name,
                     amount: newBillDb.amount,
-                    dueDate: newBillDb.due_date,
+                    dueDate: newBillDb.dueDate,
                     isPaid: newBillDb.is_paid,
                     recurrence: newBillDb.recurrence,
                     counter: newBillDb.counter
@@ -1709,47 +1633,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     profileIncomeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-
-        const selectedMonth = parseInt(incomeMonthSelect.value);
-        const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
-        if (paycheckType === 'Total Paycheck') return;
-
-        const categoryData = {};
-
-        const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
-        dynamicInputs.forEach(inp => {
-            const key = inp.id.replace('income_', '');
-            categoryData[key] = parseCurrencyValue(inp.value);
-        });
-
-        if (!monthlyIncomes[selectedMonth]) monthlyIncomes[selectedMonth] = {};
-        monthlyIncomes[selectedMonth][paycheckType] = categoryData;
+        await saveCurrentProfileToSupabase();
         setIncomeInputsEditable(false);
-
-        const startDateVal = rangeStartDateInput ? rangeStartDateInput.value : null;
-        const endDateVal = rangeEndDateInput ? rangeEndDateInput.value : null;
-
-        if (!paycheckRanges[selectedMonth]) paycheckRanges[selectedMonth] = {};
-        paycheckRanges[selectedMonth][paycheckType] = { startDate: startDateVal, endDate: endDateVal };
-
-        const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
-
-        persistStateToLocalStorage();
         updateSummaryCards();
         renderBills();
-
-        try {
-            await supabaseClient.from(prefix + 'profile_incomes').upsert({
-                month_index: selectedMonth,
-                paycheck_type: paycheckType,
-                category_data: categoryData,
-                start_date: startDateVal,
-                end_date: endDateVal,
-                updated_at: new Date()
-            });
-        } catch (err) {
-            console.error('Error saving profile income breakdown:', err);
-        }
     });
 
     logoutBtn.addEventListener('click', () => {
