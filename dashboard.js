@@ -492,7 +492,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         billEntryModal.classList.add('active');
     });
 
-    // Helper to lock fields in To Be Paid modal
     function setQuickTxFieldsLock(disabled) {
         if (quickDueDateInput) {
             quickDueDateInput.disabled = disabled;
@@ -513,7 +512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             toBePaidModalTitle.textContent = 'To Be Paid';
             payBillBtn.textContent = 'Pay Bill';
-            setQuickTxFieldsLock(true); // Lock date & total upon opening
+            setQuickTxFieldsLock(true);
         }
         billTxModal.classList.add('active');
     });
@@ -631,7 +630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         amount2Input.value = '';
                     }
                     if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
-                    setQuickTxFieldsLock(true); // Keep locked upon selection
+                    setQuickTxFieldsLock(true);
                 }
                 quickBillsDropdown.style.display = 'none';
             });
@@ -930,7 +929,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (rangeStartDateInput) rangeStartDateInput.value = range.startDate || getTodayLocalDateStr();
             if (rangeEndDateInput) rangeEndDateInput.value = range.endDate || getTodayLocalDateStr();
         } else {
-            // Preserve selected days when rolling over to a new month
             let startDay = 1;
             let endDay = 15;
             if (rangeStartDateInput && rangeStartDateInput.value) {
@@ -1203,6 +1201,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         localStorage.setItem(`cached_ranges_${currentAccount}`, JSON.stringify(paycheckRanges));
     }
 
+    // Updated Daily Interest calculation based on the actual Balance instead of Amount
     function calculateDailyInterest() {
         const selectedMonth = parseInt(incomeMonthSelect.value);
         const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
@@ -1212,18 +1211,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (typeof cat === 'object' && cat !== null && cat.interest) {
                 const fieldKey = cat.name.toLowerCase().replace(/\s+/g, '_');
                 const inputEl = document.getElementById(`income_${fieldKey}`);
+                const balanceEl = document.getElementById(`balance_income_${fieldKey}`);
 
-                if (inputEl) {
-                    let currentAmount = parseCurrencyValue(inputEl.value);
+                if (inputEl && balanceEl) {
+                    const currentBalance = parseCurrencyValue(balanceEl.textContent);
 
-                    if (currentAmount > 0) {
+                    if (currentBalance > 0) {
                         const rateDecimal = cat.interest.rate / 100;
                         const whTaxDecimal = cat.interest.whtax / 100;
 
-                        const grossDailyInterest = (currentAmount * rateDecimal) / cat.interest.pa;
+                        const grossDailyInterest = (currentBalance * rateDecimal) / cat.interest.pa;
                         const netTax = grossDailyInterest * whTaxDecimal;
                         const netDailyEarned = grossDailyInterest - netTax;
 
+                        const currentAmount = parseCurrencyValue(inputEl.value);
                         const newTotalAmount = currentAmount + netDailyEarned;
 
                         inputEl.value = formatCurrency(newTotalAmount);
