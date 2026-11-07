@@ -333,6 +333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             loadFormForSelectedMonth();
             updateSummaryCards();
+            renderBills();
         });
     }
 
@@ -358,6 +359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await saveCurrentProfileToSupabase();
             loadFormForSelectedMonth();
             updateSummaryCards();
+            renderBills();
         });
     }
 
@@ -383,12 +385,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             setupCurrencyFormatting(newEl);
 
             newEl.addEventListener('input', () => {
-                // Instantly update UI on keystroke
                 updateSummaryCards();
                 updateIncomeCategoryBalances();
                 updateHomeIncomeProgress();
 
-                // Background database sync
                 triggerAutosave(async () => {
                     await saveCurrentProfileToSupabase();
                 });
