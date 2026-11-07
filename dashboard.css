@@ -565,6 +565,58 @@ input[type=number] {
 .delete-bill-btn svg { width: 14px; height: 14px; }
 .delete-bill-btn:hover { color: #ef4444; background: #fef2f2; }
 
+/* --- HISTORY ITEM ROW STYLES --- */
+.history-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1.5px solid var(--border-light);
+    font-size: 12px;
+    transition: var(--transition-fast);
+}
+
+.history-item-row.income {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.history-item-row.expense {
+    background: #f8fafc;
+    border-color: var(--border-light);
+}
+
+.history-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.history-desc {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.history-date {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.history-amount {
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.history-amount.income-amount {
+    color: var(--accent);
+}
+
+.history-amount.expense-amount {
+    color: #ef4444;
+}
+
 .empty-state { text-align: center; font-size: 11px; color: var(--text-muted); padding: 10px 0; }
 
 .profile-card { align-items: center; text-align: center; padding: 14px 10px; }
