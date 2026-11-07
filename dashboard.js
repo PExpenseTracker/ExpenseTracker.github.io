@@ -1119,7 +1119,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     amount: b.amount,
                     dueDate: b.due_date,
                     isPaid: b.is_paid,
-                    recurrence: b.recurrence || 'one-time'
+                    recurrence: b.recurrence || 'one-time',
+                    counter: b.counter || null
                 }));
             }
 
@@ -1156,7 +1157,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                             amount: d.amount,
                             dueDate: d.date,
                             isPaid: true,
-                            recurrence: 'one-time'
+                            recurrence: 'one-time',
+                            counter: null
                         });
                     }
                 });
@@ -1201,7 +1203,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         localStorage.setItem(`cached_ranges_${currentAccount}`, JSON.stringify(paycheckRanges));
     }
 
-    // Updated Daily Interest calculation based on the actual Balance instead of Amount
     function calculateDailyInterest() {
         const selectedMonth = parseInt(incomeMonthSelect.value);
         const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
@@ -1457,7 +1458,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 amount: amount,
                 due_date: todayStr,
                 is_paid: true,
-                recurrence: 'one-time'
+                recurrence: 'one-time',
+                counter: null
             };
 
             bills.push({
@@ -1466,7 +1468,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 amount: newBillDb.amount,
                 dueDate: newBillDb.due_date,
                 isPaid: true,
-                recurrence: newBillDb.recurrence
+                recurrence: newBillDb.recurrence,
+                counter: null
             });
 
             persistStateToLocalStorage();
@@ -1557,6 +1560,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const formattedAmount = formatCurrency(bill.amount);
             const displayRecurrence = recurrenceLabels[bill.recurrence] || bill.recurrence;
 
+            // Display counter next to date if it's a monthly recurrence with a counter
+            let dateDisplayStr = `Due: ${formattedDate}`;
+            if (bill.recurrence === 'monthly' && bill.counter) {
+                dateDisplayStr = `Due: ${formattedDate} | ${bill.counter}`;
+            }
+
             li.innerHTML = `
                 <div class="bill-info">
                     <div class="bill-name-wrapper">
@@ -1564,7 +1573,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ${bill.isPaid ? '<span class="paid-badge">Paid</span>' : ''}
                         <span class="recurrence-badge">${displayRecurrence}</span>
                     </div>
-                    <span class="bill-date">Due: ${formattedDate}</span>
+                    <span class="bill-date">${dateDisplayStr}</span>
                 </div>
                 <div class="bill-actions">
                     <span class="bill-amount">-₱${formattedAmount}</span>
@@ -1612,12 +1621,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                     existingBill.amount = numericAmount;
                     existingBill.dueDate = startDateStr;
                     existingBill.recurrence = selectedRecurrence;
+                    if (selectedRecurrence === 'monthly') {
+                        existingBill.counter = existingBill.counter || `1 of ${monthsCount}`;
+                    } else {
+                        existingBill.counter = null;
+                    }
 
                     await supabaseClient.from(prefix + 'bills').update({
                         name: formattedName,
                         amount: numericAmount,
                         due_date: startDateStr,
-                        recurrence: selectedRecurrence
+                        recurrence: selectedRecurrence,
+                        counter: existingBill.counter
                     }).eq('id', editingBillId);
                 }
 
@@ -1644,16 +1659,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            for (let dStr of datesToCreate) {
+            datesToCreate.forEach((dStr, index) => {
                 const safeBillId = Date.now() + Math.floor(Math.random() * 100);
                 
+                let counterVal = null;
+                if (selectedRecurrence === 'monthly') {
+                    counterVal = `${index + 1} / ${datesToCreate.length}`;
+                }
+
                 const newBillDb = {
                     id: safeBillId,
                     name: formattedName,
                     amount: numericAmount,
                     due_date: dStr,
                     is_paid: false,
-                    recurrence: selectedRecurrence
+                    recurrence: selectedRecurrence,
+                    counter: counterVal
                 };
 
                 bills.push({
@@ -1662,11 +1683,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     amount: newBillDb.amount,
                     dueDate: newBillDb.due_date,
                     isPaid: newBillDb.is_paid,
-                    recurrence: newBillDb.recurrence
+                    recurrence: newBillDb.recurrence,
+                    counter: newBillDb.counter
                 });
 
                 supabaseClient.from(prefix + 'bills').insert([newBillDb]).then();
-            }
+            });
 
             persistStateToLocalStorage();
             updateSummaryCards();
