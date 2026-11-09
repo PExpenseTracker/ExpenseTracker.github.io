@@ -109,11 +109,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const incomeMonthSelect = document.getElementById('incomeMonth');
     const incomePaycheckTypeSelect = document.getElementById('incomePaycheckType');
 
-    let currentPaycheckType = localStorage.getItem(`activePaycheckType_${currentAccount}`) || 'Monthly Paycheck';
-    if (incomePaycheckTypeSelect) {
-        incomePaycheckTypeSelect.value = currentPaycheckType;
-    }
-
     const addIncomeSourceBtn = document.getElementById('addIncomeSourceBtn');
     const removeIncomeSourceBtn = document.getElementById('removeIncomeSourceBtn');
     const incomeSourceModal = document.getElementById('incomeSourceModal');
@@ -140,52 +135,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let paycheckRanges = {};
     let customIncomeCategories = []; 
     let isEditingIncome = false;
-
-    // --- DATE UTILITY FUNCTIONS FOR SAFE COMPARISONS ---
-    function normalizeDateToYYYYMMDD(dateInput) {
-        if (!dateInput) return '';
-        if (dateInput.includes('/')) {
-            const parts = dateInput.split('/');
-            if (parts.length === 3) {
-                // MM/DD/YYYY
-                const m = parts[0].padStart(2, '0');
-                const d = parts[1].padStart(2, '0');
-                const y = parts[2];
-                return `${y}-${m}-${d}`;
-            }
-        }
-        if (dateInput.includes('-')) {
-            const parts = dateInput.split('-');
-            if (parts.length === 3) {
-                if (parts[0].length === 4) { // YYYY-MM-DD
-                    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-                } else { // MM-DD-YYYY
-                    return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-                }
-            }
-        }
-        return dateInput.slice(0, 10);
-    }
-
-    function getMonthIndexFromDateStr(dateStr) {
-        const norm = normalizeDateToYYYYMMDD(dateStr);
-        if (norm.length >= 7) {
-            const parts = norm.split('-');
-            const monthNum = parseInt(parts[1], 10);
-            if (!isNaN(monthNum)) return monthNum - 1;
-        }
-        return currentMonth;
-    }
-
-    function formatToMMDDYYYY(dateStrOrObj) {
-        if (!dateStrOrObj) return '';
-        const norm = normalizeDateToYYYYMMDD(String(dateStrOrObj));
-        if (norm.includes('-')) {
-            const parts = norm.split('-');
-            return `${parts[1]}/${parts[2]}/${parts[0]}`;
-        }
-        return dateStrOrObj;
-    }
 
     function formatDescriptionText(rawStr) {
         if (!rawStr) return '';
@@ -330,85 +279,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    function calculateCategoryAvailableBalance(categoryName) {
-        const activeMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
-        const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
-        const activeRange = getActiveDateRange();
-
-        const fieldKey = categoryName.toLowerCase().replace(/\s+/g, '_');
-        const inputEl = document.getElementById(`income_${fieldKey}`);
-        const encodedAmount = inputEl ? parseCurrencyValue(inputEl.value) : 0;
-
-        const totalDeducted = transactions
-            .filter(t => {
-                if (t.type !== 'expense' || !t.source) return false;
-                const sources = t.source.toLowerCase().split('/');
-                if (!sources.includes(categoryName.toLowerCase())) return false;
-                if (!t.date) return false;
-                
-                const normTxDate = normalizeDateToYYYYMMDD(t.date);
-                if (paycheckType !== 'Total Paycheck' && activeRange.startDate && activeRange.endDate) {
-                    const normStart = normalizeDateToYYYYMMDD(activeRange.startDate);
-                    const normEnd = normalizeDateToYYYYMMDD(activeRange.endDate);
-                    return normTxDate >= normStart && normTxDate <= normEnd;
-                }
-                if (paycheckType === 'Total Paycheck') return true;
-                const txMonth = getMonthIndexFromDateStr(normTxDate);
-                return txMonth === activeMonth;
-            })
-            .reduce((sum, t) => {
-                if (t.source.includes('/')) {
-                    const parts = t.source.split('/');
-                    if (parts[0].toLowerCase() === categoryName.toLowerCase()) {
-                        return sum + (parseCurrencyValue(t.amount1) || (parseCurrencyValue(t.amount) / 2));
-                    } else if (parts[1] && parts[1].toLowerCase() === categoryName.toLowerCase()) {
-                        return sum + (parseCurrencyValue(t.amount2) || (parseCurrencyValue(t.amount) / 2));
-                    }
-                }
-                return sum + parseCurrencyValue(t.amount);
-            }, 0);
-
-        return encodedAmount - totalDeducted;
-    }
-
-    function autoSelectBestDeductSource(targetAmount) {
-        const deductSource1 = document.getElementById('deductSource1');
-        if (!deductSource1 || customIncomeCategories.length === 0) return;
-
-        let exactMatchCategory = null;
-        let highestBalanceCategory = null;
-        let highestBalance = -Infinity;
-
-        customIncomeCategories.forEach(cat => {
-            const cName = getCategoryName(cat);
-            const bal = calculateCategoryAvailableBalance(cName);
-
-            if (Math.abs(bal - targetAmount) < 0.01) {
-                exactMatchCategory = cName;
-            }
-
-            if (bal > highestBalance) {
-                highestBalance = bal;
-                highestBalanceCategory = cName;
-            }
-        });
-
-        const bestSource = exactMatchCategory || highestBalanceCategory;
-        if (bestSource) {
-            deductSource1.value = bestSource;
-        }
-    }
-
     if (addIncomeSourceBtn) {
         addIncomeSourceBtn.addEventListener('click', () => {
             if (customIncomeSourceForm) customIncomeSourceForm.reset();
             if (interestFieldsSlot) interestFieldsSlot.style.display = 'none';
-            const titleEl = incomeSourceModal.querySelector('h3') || incomeSourceModal.querySelector('.modal-header h3');
-            if (titleEl) titleEl.textContent = 'Add Income Source';
-            const submitBtn = customIncomeSourceForm.querySelector('button[type="submit"]');
-            if (submitBtn) submitBtn.textContent = 'Save Source';
-            delete customIncomeSourceForm.dataset.editingCategory;
-
             if (incomeSourceModal) incomeSourceModal.classList.add('active');
         });
     }
@@ -436,7 +310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (customIncomeSourceForm) {
-        customIncomeSourceForm.addEventListener('submit', async (e) => {
+        customIncomeSourceForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const rawName = customIncomeSourceNameInput.value.trim();
             if (!rawName) return;
@@ -450,40 +324,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 whtax: parseFloat(document.getElementById('interestWHTax').value) || 20
             } : null;
 
-            const editingOldName = customIncomeSourceForm.dataset.editingCategory;
+            const existingNames = customIncomeCategories.map(c => getCategoryName(c));
+            if (!existingNames.includes(categoryName)) {
+                const newCatObj = interestConfig ? { name: categoryName, interest: interestConfig } : categoryName;
+                customIncomeCategories.push(newCatObj);
 
-            if (editingOldName) {
-                const targetObj = customIncomeCategories.find(c => getCategoryName(c).toLowerCase() === editingOldName.toLowerCase());
-                if (targetObj) {
-                    if (typeof targetObj === 'object') {
-                        targetObj.name = categoryName;
-                    } else {
-                        const idx = customIncomeCategories.indexOf(targetObj);
-                        if (idx !== -1) {
-                            customIncomeCategories[idx] = interestConfig ? { name: categoryName, interest: interestConfig } : categoryName;
-                        }
-                    }
-                }
-                delete customIncomeSourceForm.dataset.editingCategory;
-            } else {
-                const existingNames = customIncomeCategories.map(c => getCategoryName(c).toLowerCase());
-                if (!existingNames.includes(categoryName.toLowerCase())) {
-                    const newCatObj = interestConfig ? { name: categoryName, interest: interestConfig } : categoryName;
-                    customIncomeCategories.unshift(newCatObj);
-                }
+                addDynamicIncomeFieldUI(categoryName);
+                localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
+                updateIncomeDropdownOptions();
             }
-
-            localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
-
-            if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
-            if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
-
-            customIncomeCategories.forEach(cat => {
-                addDynamicIncomeFieldUI(getCategoryName(cat));
-            });
-
-            updateIncomeDropdownOptions();
-            await syncCategoryOrderToSupabase();
 
             if (incomeSourceModal) incomeSourceModal.classList.remove('active');
             if (enableInterestCheck) enableInterestCheck.checked = false;
@@ -495,7 +344,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (deleteIncomeSourceForm) {
-        deleteIncomeSourceForm.addEventListener('submit', async (e) => {
+        deleteIncomeSourceForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const categoryToRemove = deleteIncomeSourceSelect.value;
             if (!categoryToRemove) return;
@@ -511,42 +360,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (homeRow) homeRow.remove();
 
             updateIncomeDropdownOptions();
-            await syncCategoryOrderToSupabase();
             if (deleteIncomeSourceModal) deleteIncomeSourceModal.classList.remove('active');
 
             loadFormForSelectedMonth();
             updateSummaryCards();
         });
-    }
-
-    async function syncCategoryOrderToSupabase() {
-        try {
-            const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
-            const selectedMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
-            const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
-            if (paycheckType === 'Total Paycheck') return;
-
-            const categoryData = {};
-            const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
-            dynamicInputs.forEach(inp => {
-                const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
-                categoryData[key] = parseCurrencyValue(inp.value);
-            });
-
-            const rangeInfo = paycheckRanges[selectedMonth]?.[paycheckType] || {};
-
-            await supabaseClient.from(prefix + 'profile_incomes').upsert({
-                month_index: selectedMonth,
-                paycheck_type: paycheckType,
-                category_data: categoryData,
-                category_order: customIncomeCategories.map(c => getCategoryName(c)),
-                start_date: rangeInfo.startDate ? normalizeDateToYYYYMMDD(rangeInfo.startDate) : null,
-                end_date: rangeInfo.endDate ? normalizeDateToYYYYMMDD(rangeInfo.endDate) : null,
-                updated_at: new Date()
-            });
-        } catch (err) {
-            console.error('Error syncing category order to Supabase:', err);
-        }
     }
 
     function addDynamicIncomeFieldUI(categoryName) {
@@ -561,7 +379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             fieldRow.innerHTML = `
                 <span class="drag-handle" title="Drag to reorder">☰</span>
-                <label for="income_${fieldKey}" style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${categoryName}">${categoryName}</label>
+                <label for="income_${fieldKey}" style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${categoryName}</label>
                 <input type="text" id="income_${fieldKey}" data-category="${categoryName}" class="currency-input income-dynamic-input" placeholder="" autocomplete="off" ${isEditingIncome ? '' : 'disabled'}>
                 <div id="balance_income_${fieldKey}" class="income-balance-display" title="Remaining Balance"></div>
             `;
@@ -585,22 +403,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     localStorage.setItem(`cached_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
 
                     const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
-                    const rangeInfo = paycheckRanges[selectedMonth]?.[paycheckType] || {};
-
-                    const categoryData = {};
-                    const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
-                    dynamicInputs.forEach(inp => {
-                        const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
-                        categoryData[key] = parseCurrencyValue(inp.value);
-                    });
-
                     await supabaseClient.from(prefix + 'profile_incomes').upsert({
                         month_index: selectedMonth,
                         paycheck_type: paycheckType,
-                        category_data: categoryData,
-                        category_order: customIncomeCategories.map(c => getCategoryName(c)),
-                        start_date: rangeInfo.startDate ? normalizeDateToYYYYMMDD(rangeInfo.startDate) : null,
-                        end_date: rangeInfo.endDate ? normalizeDateToYYYYMMDD(rangeInfo.endDate) : null,
+                        category_data: monthlyIncomes[selectedMonth][paycheckType],
+                        start_date: rangeStartDateInput ? rangeStartDateInput.value : null,
+                        end_date: rangeEndDateInput ? rangeEndDateInput.value : null,
                         updated_at: new Date()
                     });
                 });
@@ -611,11 +419,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 fieldRow.classList.add('dragging');
             });
 
-            fieldRow.addEventListener('dragend', async () => {
+            fieldRow.addEventListener('dragend', () => {
                 fieldRow.classList.remove('dragging');
                 saveNewCategoryOrder();
-                updateIncomeDropdownOptions();
-                await syncCategoryOrderToSupabase();
             });
 
             fieldRow.addEventListener('dragover', (e) => {
@@ -633,33 +439,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     dynamicIncomeFieldsContainer.insertBefore(draggingRow, fieldRow);
                 }
             });
-
-            const dragHandle = fieldRow.querySelector('.drag-handle');
-            if (dragHandle) {
-                dragHandle.addEventListener('touchmove', (e) => {
-                    const touchY = e.touches[0].clientY;
-                    const rows = Array.from(dynamicIncomeFieldsContainer.querySelectorAll('.draggable-row'));
-                    
-                    rows.forEach(row => {
-                        if (row === fieldRow) return;
-                        const box = row.getBoundingClientRect();
-                        if (touchY >= box.top && touchY <= box.bottom) {
-                            if (touchY < box.top + box.height / 2) {
-                                dynamicIncomeFieldsContainer.insertBefore(fieldRow, row);
-                            } else {
-                                dynamicIncomeFieldsContainer.insertBefore(fieldRow, row.nextSibling);
-                            }
-                        }
-                    });
-                }, { passive: true });
-
-                dragHandle.addEventListener('touchend', async () => {
-                    fieldRow.classList.remove('dragging');
-                    saveNewCategoryOrder();
-                    updateIncomeDropdownOptions();
-                    await syncCategoryOrderToSupabase();
-                });
-            }
         }
 
         if (homeIncomeProgressList && !document.getElementById(`home_${fieldKey}_Actual`)) {
@@ -724,8 +503,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     function setQuickTxFieldsLock(disabled) {
-        if (quickDueDateInput) quickDueDateInput.disabled = disabled;
-        if (totalAmountInput) totalAmountInput.disabled = disabled;
+        if (quickDueDateInput) {
+            quickDueDateInput.disabled = disabled;
+        }
+        if (totalAmountInput) {
+            totalAmountInput.disabled = disabled;
+        }
     }
 
     openBillTxModalBtn.addEventListener('click', () => {
@@ -756,6 +539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         dailyTxModal.classList.add('active');
     });
 
+    // Quick Income Modal Event Listener
     if (openIncomeEntryModalBtn && incomeEntryModal) {
         openIncomeEntryModalBtn.addEventListener('click', () => {
             quickIncomeForm.reset();
@@ -834,10 +618,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const listToFilter = isEditMode ? bills : bills.filter(b => !b.isPaid);
         const filtered = listToFilter.filter(b => {
             if (!activeRange.startDate || !activeRange.endDate) return true;
-            const bNorm = normalizeDateToYYYYMMDD(b.dueDate);
-            const startNorm = normalizeDateToYYYYMMDD(activeRange.startDate);
-            const endNorm = normalizeDateToYYYYMMDD(activeRange.endDate);
-            return bNorm >= startNorm && bNorm <= endNorm;
+            const bDate = new Date(b.dueDate);
+            return bDate >= new Date(activeRange.startDate) && bDate <= new Date(activeRange.endDate);
         });
 
         if (filtered.length === 0) {
@@ -856,7 +638,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     toBePaidModalTitle.textContent = `Edit Transaction: ${b.name}`;
                     descInput.value = b.name;
                     totalAmountInput.value = formatCurrency(b.amount);
-                    if (quickDueDateInput) quickDueDateInput.value = normalizeDateToYYYYMMDD(b.dueDate);
+                    if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
                     payBillBtn.textContent = 'Update Transaction';
                     setQuickTxFieldsLock(true);
                 } else {
@@ -867,11 +649,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (splitAmountCheck.checked) {
                         amount2Input.value = '';
                     }
-                    if (quickDueDateInput) quickDueDateInput.value = normalizeDateToYYYYMMDD(b.dueDate);
+                    if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
                     setQuickTxFieldsLock(false);
                 }
-
-                autoSelectBestDeductSource(b.amount);
                 quickBillsDropdown.style.display = 'none';
             });
 
@@ -916,7 +696,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 editingBillId = b.id;
                 billNameInput.value = b.name;
                 document.getElementById('billAmount').value = formatCurrency(b.amount);
-                billDueDateInput.value = normalizeDateToYYYYMMDD(b.dueDate);
+                billDueDateInput.value = b.dueDate;
                 if (b.recurrence) {
                     const radio = document.querySelector(`input[name="recurrenceType"][value="${b.recurrence}"]`);
                     if (radio) radio.checked = true;
@@ -1003,14 +783,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             .filter(t => {
                 if (t.type !== 'expense') return false;
                 if (!t.date) return false;
-                const normTxDate = normalizeDateToYYYYMMDD(t.date);
                 if (paycheckType !== 'Total Paycheck' && activeRange.startDate && activeRange.endDate) {
-                    const normStart = normalizeDateToYYYYMMDD(activeRange.startDate);
-                    const normEnd = normalizeDateToYYYYMMDD(activeRange.endDate);
-                    return normTxDate >= normStart && normTxDate <= normEnd;
+                    return t.date >= activeRange.startDate && t.date <= activeRange.endDate;
                 }
                 if (paycheckType === 'Total Paycheck') return true;
-                const txMonth = getMonthIndexFromDateStr(normTxDate);
+                const txMonth = new Date(t.date).getMonth();
                 return txMonth === selectedMonth;
             })
             .reduce((sum, t) => sum + parseCurrencyValue(t.amount), 0);
@@ -1041,13 +818,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
                 if (paycheckType === 'Total Paycheck') return;
 
-                const normStart = normalizeDateToYYYYMMDD(rangeStartDateInput.value);
-                const normEnd = normalizeDateToYYYYMMDD(rangeEndDateInput.value);
-
                 if (!paycheckRanges[selectedMonth]) paycheckRanges[selectedMonth] = {};
                 paycheckRanges[selectedMonth][paycheckType] = {
-                    startDate: normStart,
-                    endDate: normEnd
+                    startDate: rangeStartDateInput.value,
+                    endDate: rangeEndDateInput.value
                 };
 
                 localStorage.setItem(`cached_ranges_${currentAccount}`, JSON.stringify(paycheckRanges));
@@ -1056,20 +830,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 triggerAutosave(async () => {
                     const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
-                    const categoryData = {};
-                    const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
-                    dynamicInputs.forEach(inp => {
-                        const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
-                        categoryData[key] = parseCurrencyValue(inp.value);
-                    });
-
                     await supabaseClient.from(prefix + 'profile_incomes').upsert({
                         month_index: selectedMonth,
                         paycheck_type: paycheckType,
-                        category_data: categoryData,
-                        category_order: customIncomeCategories.map(c => getCategoryName(c)),
-                        start_date: normStart,
-                        end_date: normEnd,
+                        category_data: monthlyIncomes[selectedMonth]?.[paycheckType] || {},
+                        start_date: rangeStartDateInput.value,
+                        end_date: rangeEndDateInput.value,
                         updated_at: new Date()
                     });
                 });
@@ -1098,14 +864,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .filter(t => {
                     if (t.type !== 'expense' || !t.source || t.source.toLowerCase() !== categoryName.toLowerCase()) return false;
                     if (!t.date) return false;
-                    const normTxDate = normalizeDateToYYYYMMDD(t.date);
                     if (paycheckType !== 'Total Paycheck' && activeRange.startDate && activeRange.endDate) {
-                        const normStart = normalizeDateToYYYYMMDD(activeRange.startDate);
-                        const normEnd = normalizeDateToYYYYMMDD(activeRange.endDate);
-                        return normTxDate >= normStart && normTxDate <= normEnd;
+                        return t.date >= activeRange.startDate && t.date <= activeRange.endDate;
                     }
                     if (paycheckType === 'Total Paycheck') return true;
-                    const txMonth = getMonthIndexFromDateStr(normTxDate);
+                    const txMonth = new Date(t.date).getMonth();
                     return txMonth === activeMonth;
                 })
                 .reduce((sum, t) => sum + parseCurrencyValue(t.amount), 0);
@@ -1143,14 +906,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         const sources = t.source.toLowerCase().split('/');
                         if (!sources.includes(catName.toLowerCase())) return false;
                         if (!t.date) return false;
-                        const normTxDate = normalizeDateToYYYYMMDD(t.date);
                         if (paycheckType !== 'Total Paycheck' && activeRange.startDate && activeRange.endDate) {
-                            const normStart = normalizeDateToYYYYMMDD(activeRange.startDate);
-                            const normEnd = normalizeDateToYYYYMMDD(activeRange.endDate);
-                            return normTxDate >= normStart && normTxDate <= normEnd;
+                            return t.date >= activeRange.startDate && t.date <= activeRange.endDate;
                         }
                         if (paycheckType === 'Total Paycheck') return true;
-                        const txMonth = getMonthIndexFromDateStr(normTxDate);
+                        const txMonth = new Date(t.date).getMonth();
                         return txMonth === activeMonth;
                     })
                     .reduce((sum, t) => {
@@ -1186,20 +946,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (paycheckRanges[selectedMonth]?.[paycheckType]) {
             const range = paycheckRanges[selectedMonth][paycheckType];
-            if (rangeStartDateInput) rangeStartDateInput.value = normalizeDateToYYYYMMDD(range.startDate) || getTodayLocalDateStr();
-            if (rangeEndDateInput) rangeEndDateInput.value = normalizeDateToYYYYMMDD(range.endDate) || getTodayLocalDateStr();
+            if (rangeStartDateInput) rangeStartDateInput.value = range.startDate || getTodayLocalDateStr();
+            if (rangeEndDateInput) rangeEndDateInput.value = range.endDate || getTodayLocalDateStr();
         } else {
             let startDay = 1;
             let endDay = 15;
             if (rangeStartDateInput && rangeStartDateInput.value) {
-                const normS = normalizeDateToYYYYMMDD(rangeStartDateInput.value);
-                const pS = normS.split('-');
-                if (pS.length === 3) startDay = parseInt(pS[2], 10);
+                const curStart = new Date(rangeStartDateInput.value);
+                if (!isNaN(curStart.getTime())) startDay = curStart.getDate();
             }
             if (rangeEndDateInput && rangeEndDateInput.value) {
-                const normE = normalizeDateToYYYYMMDD(rangeEndDateInput.value);
-                const pE = normE.split('-');
-                if (pE.length === 3) endDay = parseInt(pE[2], 10);
+                const curEnd = new Date(rangeEndDateInput.value);
+                if (!isNaN(curEnd.getTime())) endDay = curEnd.getDate();
             }
             const curYear = new Date().getFullYear();
             const newStart = `${curYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
@@ -1222,7 +980,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
             dynamicInputs.forEach(inp => {
-                const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
+                const key = inp.id.replace('income_', '');
                 inp.value = dynamicSums[key] ? formatCurrency(dynamicSums[key]) : '';
             });
 
@@ -1250,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
         dynamicInputs.forEach(inp => {
-            const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
+            const key = inp.id.replace('income_', '');
             inp.value = data[key] ? formatCurrency(data[key]) : '';
         });
 
@@ -1303,7 +1061,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (incomePaycheckTypeSelect) {
         incomePaycheckTypeSelect.addEventListener('change', () => {
-            localStorage.setItem(`activePaycheckType_${currentAccount}`, incomePaycheckTypeSelect.value);
             loadFormForSelectedMonth();
             updateSummaryCards();
             renderBills();
@@ -1315,9 +1072,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentAccount = e.target.value;
             localStorage.setItem('activeAccount', currentAccount);
             if (profileAccountName) profileAccountName.textContent = currentAccount;
-
-            const savedPaycheck = localStorage.getItem(`activePaycheckType_${currentAccount}`) || 'Monthly Paycheck';
-            if (incomePaycheckTypeSelect) incomePaycheckTypeSelect.value = savedPaycheck;
 
             bills = [];
             transactions = [];
@@ -1344,10 +1098,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 customIncomeCategories = JSON.parse(cachedCats);
             }
 
+            customIncomeCategories.forEach(cat => {
+                addDynamicIncomeFieldUI(getCategoryName(cat));
+            });
+            updateIncomeDropdownOptions();
+
             if (cachedBills) bills = JSON.parse(cachedBills);
             if (cachedTx) transactions = JSON.parse(cachedTx);
             if (cachedIncomes) monthlyIncomes = JSON.parse(cachedIncomes);
             if (cachedRanges) paycheckRanges = JSON.parse(cachedRanges);
+
+            if (cachedBills || cachedTx || cachedIncomes) {
+                loadFormForSelectedMonth();
+                updateSummaryCards();
+                renderBills();
+                renderHistory();
+            }
 
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
             const billsTable = prefix + 'bills';
@@ -1372,7 +1138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     id: Number(b.id),
                     name: b.name,
                     amount: b.amount,
-                    dueDate: normalizeDateToYYYYMMDD(b.due_date),
+                    dueDate: b.due_date,
                     isPaid: b.is_paid,
                     recurrence: b.recurrence || 'one-time',
                     counter: b.counter || null
@@ -1386,13 +1152,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     amount: t.amount,
                     type: t.type,
                     source: t.source,
-                    date: normalizeDateToYYYYMMDD(t.date || getTodayLocalDateStr())
+                    date: t.date || getTodayLocalDateStr()
                 }));
             }
 
             if (dailyRes.data) {
                 dailyRes.data.forEach(d => {
-                    const normDDate = normalizeDateToYYYYMMDD(d.date);
                     const existsTx = transactions.some(t => t.id === d.id);
                     if (!existsTx) {
                         transactions.push({
@@ -1401,17 +1166,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                             amount: d.amount,
                             type: (d.description || d.desc || '').toLowerCase().includes('income') ? 'income' : 'expense',
                             source: d.category || d.source,
-                            date: normDDate
+                            date: d.date
                         });
                     }
 
-                    const existsBill = bills.some(b => b.name.toLowerCase() === (d.description || d.desc || '').toLowerCase() && b.dueDate === normDDate);
+                    const existsBill = bills.some(b => b.name.toLowerCase() === (d.description || d.desc || '').toLowerCase() && b.dueDate === d.date);
                     if (!existsBill) {
                         bills.push({
                             id: Date.now() + Math.floor(Math.random() * 100),
                             name: d.description || d.desc,
                             amount: d.amount,
-                            dueDate: normDDate,
+                            dueDate: d.date,
                             isPaid: true,
                             recurrence: 'one-time',
                             counter: null
@@ -1421,13 +1186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (profileRes.data) {
-                let globalOrderFound = null;
-
                 profileRes.data.forEach(row => {
-                    if (row.category_order && Array.isArray(row.category_order) && row.category_order.length > 0) {
-                        globalOrderFound = row.category_order;
-                    }
-
                     const mIdx = row.month_index;
                     const pType = row.paycheck_type || 'Monthly Paycheck';
                     if (!monthlyIncomes[mIdx]) monthlyIncomes[mIdx] = {};
@@ -1435,40 +1194,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     const catData = row.category_data || {};
 
-                    Object.keys(catData).forEach(key => {
-                        const formattedName = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                        const exists = customIncomeCategories.some(c => getCategoryName(c).toLowerCase() === formattedName.toLowerCase());
-                        if (!exists) {
-                            customIncomeCategories.push(formattedName);
-                        }
-                    });
-
                     monthlyIncomes[mIdx][pType] = catData;
                     if (row.start_date || row.end_date) {
                         paycheckRanges[mIdx][pType] = {
-                            startDate: row.start_date ? normalizeDateToYYYYMMDD(row.start_date) : null,
-                            endDate: row.end_date ? normalizeDateToYYYYMMDD(row.end_date) : null
+                            startDate: row.start_date,
+                            endDate: row.end_date
                         };
                     }
                 });
-
-                if (globalOrderFound) {
-                    customIncomeCategories = globalOrderFound.map(catName => {
-                        const existing = customIncomeCategories.find(c => getCategoryName(c).toLowerCase() === catName.toLowerCase());
-                        return existing || catName;
-                    });
-                }
-
-                localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
             }
-
-            if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
-            if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
-
-            customIncomeCategories.forEach(cat => {
-                addDynamicIncomeFieldUI(getCategoryName(cat));
-            });
-            updateIncomeDropdownOptions();
 
             localStorage.setItem(`cache_bills_${currentAccount}`, JSON.stringify(bills));
             localStorage.setItem(`cache_tx_${currentAccount}`, JSON.stringify(transactions));
@@ -1502,14 +1236,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const sortedTx = [...transactions].sort((a, b) => new Date(normalizeDateToYYYYMMDD(b.date)) - new Date(normalizeDateToYYYYMMDD(a.date)));
+        const sortedTx = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
         const fragment = document.createDocumentFragment();
 
         sortedTx.forEach(tx => {
             const li = document.createElement('li');
             li.className = `history-item-row ${tx.type || 'expense'}`;
 
-            const formattedDate = formatToMMDDYYYY(tx.date);
+            const [year, month, day] = (tx.date || '').split('-');
+            const formattedDate = (year && month && day) ? `${month}/${day}/${year}` : (tx.date || '');
             const formattedAmount = formatCurrency(tx.amount);
             const sign = tx.type === 'income' ? '+' : '-';
             const colorClass = tx.type === 'income' ? 'income-amount' : 'expense-amount';
@@ -1633,7 +1368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 matchingBill.name = formattedDesc;
                 matchingBill.amount = totalAmt;
                 if (quickDueDateInput && quickDueDateInput.value) {
-                    matchingBill.dueDate = normalizeDateToYYYYMMDD(quickDueDateInput.value);
+                    matchingBill.dueDate = quickDueDateInput.value;
                 }
 
                 await supabaseClient.from(prefix + 'bills').update({
@@ -1707,7 +1442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 amount: totalAmt,
                 type: 'expense',
                 source: splitAmountCheck.checked ? `${deductSource1}/${deductSource2}` : deductSource1,
-                date: normalizeDateToYYYYMMDD(quickDueDateInput && quickDueDateInput.value ? quickDueDateInput.value : getTodayLocalDateStr())
+                date: quickDueDateInput && quickDueDateInput.value ? quickDueDateInput.value : getTodayLocalDateStr()
             };
 
             transactions.push({
@@ -1802,7 +1537,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 amount: newBillDb.amount,
                 dueDate: newBillDb.due_date,
                 isPaid: true,
-                recurrence: 'one-time',
+                recurrence: newBillDb.recurrence,
                 counter: null
             });
 
@@ -1828,33 +1563,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Quick Income Form Submission Handler
     if (quickIncomeForm) {
         quickIncomeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const selectedCategory = quickIncomeCategorySelect.value;
             const addAmount = parseCurrencyValue(quickIncomeAmountInput.value);
-            const rawIncomeDate = quickIncomeDateInput.value;
+            const incomeDateStr = quickIncomeDateInput.value;
 
-            if (!selectedCategory || addAmount <= 0 || !rawIncomeDate) return;
+            if (!selectedCategory || addAmount <= 0 || !incomeDateStr) return;
 
-            // Safe YYYY-MM-DD normalization & Month Index extraction
-            const normalizedIncomeDate = normalizeDateToYYYYMMDD(rawIncomeDate);
-            const targetMonth = getMonthIndexFromDateStr(normalizedIncomeDate);
+            const targetDate = new Date(incomeDateStr);
+            const targetMonth = isNaN(targetDate.getTime()) ? currentMonth : targetDate.getMonth();
 
-            // Determine target paycheck type by matching normalized date strings
-            let targetPaycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
-            if (targetPaycheckType === 'Total Paycheck') {
-                targetPaycheckType = 'Monthly Paycheck';
-            }
-
+            let targetPaycheckType = 'Monthly Paycheck';
             if (paycheckRanges[targetMonth]) {
                 for (const [pType, range] of Object.entries(paycheckRanges[targetMonth])) {
-                    if (range && range.startDate && range.endDate) {
-                        const startNorm = normalizeDateToYYYYMMDD(range.startDate);
-                        const endNorm = normalizeDateToYYYYMMDD(range.endDate);
-
-                        if (normalizedIncomeDate >= startNorm && normalizedIncomeDate <= endNorm) {
+                    if (range.startDate && range.endDate) {
+                        if (incomeDateStr >= range.startDate && incomeDateStr <= range.endDate) {
                             targetPaycheckType = pType;
                             break;
                         }
@@ -1871,6 +1598,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             monthlyIncomes[targetMonth][targetPaycheckType][fieldKey] = newTotalAmount;
 
+            // Also record this as an income transaction in history so it tracks correctly
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
             const uniqueId = 'inc_' + Date.now();
             const newTxDb = {
@@ -1879,7 +1607,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 amount: addAmount,
                 type: 'income',
                 source: selectedCategory,
-                date: normalizedIncomeDate
+                date: incomeDateStr
             };
 
             transactions.push({
@@ -1901,16 +1629,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 const rangeInfo = paycheckRanges[targetMonth]?.[targetPaycheckType] || {};
-                const categoryData = monthlyIncomes[targetMonth][targetPaycheckType] || {};
 
                 await Promise.all([
                     supabaseClient.from(prefix + 'profile_incomes').upsert({
                         month_index: targetMonth,
                         paycheck_type: targetPaycheckType,
-                        category_data: categoryData,
-                        category_order: customIncomeCategories.map(c => getCategoryName(c)),
-                        start_date: rangeInfo.startDate ? normalizeDateToYYYYMMDD(rangeInfo.startDate) : null,
-                        end_date: rangeInfo.endDate ? normalizeDateToYYYYMMDD(rangeInfo.endDate) : null,
+                        category_data: monthlyIncomes[targetMonth][targetPaycheckType],
+                        start_date: rangeInfo.startDate || null,
+                        end_date: rangeInfo.endDate || null,
                         updated_at: new Date()
                     }),
                     supabaseClient.from(prefix + 'history').insert([newTxDb]),
@@ -1946,12 +1672,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             filteredBills = bills;
         } 
         else if (activeRange.startDate && activeRange.endDate) {
-            const startNorm = normalizeDateToYYYYMMDD(activeRange.startDate);
-            const endNorm = normalizeDateToYYYYMMDD(activeRange.endDate);
-
             filteredBills = bills.filter(bill => {
-                const bNorm = normalizeDateToYYYYMMDD(bill.dueDate);
-                return bNorm >= startNorm && bNorm <= endNorm;
+                return bill.dueDate >= activeRange.startDate && bill.dueDate <= activeRange.endDate;
             });
         } 
         else {
@@ -1959,8 +1681,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const targetMonth = filterMonthVal !== 'all' ? parseInt(filterMonthVal) : selectedMonth;
             
             filteredBills = bills.filter(bill => {
-                const bNorm = normalizeDateToYYYYMMDD(bill.dueDate);
-                const billMonth = getMonthIndexFromDateStr(bNorm);
+                const billMonth = new Date(bill.dueDate).getMonth();
                 return billMonth === targetMonth;
             });
         }
@@ -1978,7 +1699,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        filteredBills.sort((a, b) => new Date(normalizeDateToYYYYMMDD(a.dueDate)) - new Date(normalizeDateToYYYYMMDD(b.dueDate)));
+        filteredBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
         const fragment = document.createDocumentFragment();
 
         const recurrenceLabels = {
@@ -1991,7 +1712,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const li = document.createElement('li');
             li.className = `bill-item-row ${bill.isPaid ? 'is-paid' : ''}`;
             
-            const formattedDate = formatToMMDDYYYY(bill.dueDate);
+            const [year, month, day] = bill.dueDate.split('-');
+            const formattedDate = `${month}/${day}/${year}`;
             const formattedAmount = formatCurrency(bill.amount);
             const displayRecurrence = recurrenceLabels[bill.recurrence] || bill.recurrence;
 
@@ -2044,7 +1766,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const formattedName = formatDescriptionText(rawName);
-        const normStartDate = normalizeDateToYYYYMMDD(startDateStr);
 
         try {
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
@@ -2055,7 +1776,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (existingBill) {
                     existingBill.name = formattedName;
                     existingBill.amount = numericAmount;
-                    existingBill.dueDate = normStartDate;
+                    existingBill.dueDate = startDateStr;
                     existingBill.recurrence = selectedRecurrence;
                     if (selectedRecurrence === 'monthly') {
                         existingBill.counter = existingBill.counter || `1 / ${monthsCount}`;
@@ -2066,7 +1787,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await supabaseClient.from(prefix + 'bills').update({
                         name: formattedName,
                         amount: numericAmount,
-                        due_date: normStartDate,
+                        due_date: startDateStr,
                         recurrence: selectedRecurrence,
                         counter: existingBill.counter
                     }).eq('id', editingBillId);
@@ -2085,16 +1806,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            let datesToCreate = [normStartDate];
+            let datesToCreate = [startDateStr];
 
             if (selectedRecurrence === 'monthly') {
-                let baseDate = new Date(normStartDate);
+                let baseDate = new Date(startDateStr);
                 for (let i = 1; i < monthsCount; i++) {
                     baseDate.setMonth(baseDate.getMonth() + 1);
                     datesToCreate.push(baseDate.toISOString().split('T')[0]);
                 }
             } else if (selectedRecurrence === 'permanent') {
-                let baseDate = new Date(normStartDate);
+                let baseDate = new Date(startDateStr);
                 for (let i = 1; i < 12; i++) {
                     baseDate.setMonth(baseDate.getMonth() + 1);
                     datesToCreate.push(baseDate.toISOString().split('T')[0]);
@@ -2172,7 +1893,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
         dynamicInputs.forEach(inp => {
-            const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
+            const key = inp.id.replace('income_', '');
             categoryData[key] = parseCurrencyValue(inp.value);
         });
 
@@ -2180,8 +1901,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         monthlyIncomes[selectedMonth][paycheckType] = categoryData;
         setIncomeInputsEditable(false);
 
-        const startDateVal = rangeStartDateInput ? normalizeDateToYYYYMMDD(rangeStartDateInput.value) : null;
-        const endDateVal = rangeEndDateInput ? normalizeDateToYYYYMMDD(rangeEndDateInput.value) : null;
+        const startDateVal = rangeStartDateInput ? rangeStartDateInput.value : null;
+        const endDateVal = rangeEndDateInput ? rangeEndDateInput.value : null;
 
         if (!paycheckRanges[selectedMonth]) paycheckRanges[selectedMonth] = {};
         paycheckRanges[selectedMonth][paycheckType] = { startDate: startDateVal, endDate: endDateVal };
@@ -2198,7 +1919,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 month_index: selectedMonth,
                 paycheck_type: paycheckType,
                 category_data: categoryData,
-                category_order: customIncomeCategories.map(c => getCategoryName(c)),
                 start_date: startDateVal,
                 end_date: endDateVal,
                 updated_at: new Date()
