@@ -16,11 +16,12 @@
 * {
     -webkit-tap-highlight-color: transparent;
     outline: none;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 
 body {
     margin: 0;
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
     background: #0f172a;
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
@@ -29,7 +30,7 @@ body {
 body.dashboard-body {
     align-items: center;
     padding: 10px 10px 75px 10px;
-    height: 100vh;
+    height: 100dvh; 
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -51,6 +52,7 @@ body.dashboard-body {
     background: #ffffff;
     padding: 8px 10px;
     border-radius: var(--radius-md);
+    flex-shrink: 0;
 }
 
 .brand-logo {
@@ -73,12 +75,16 @@ body.dashboard-body {
     width: 100%;
     flex: 1;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .tab-view {
     display: none;
     flex-direction: column;
     gap: 10px;
+    height: 100%;
+    overflow: hidden;
 }
 
 .tab-view.active {
@@ -91,6 +97,7 @@ body.dashboard-body {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
+    flex-shrink: 0;
 }
 
 .summary-card {
@@ -187,7 +194,6 @@ body.dashboard-body {
     color: var(--text-primary);
 }
 
-/* Custom Combobox Dropdown */
 .custom-combobox-dropdown {
     position: absolute;
     top: 38px;
@@ -219,7 +225,6 @@ body.dashboard-body {
     color: var(--primary);
 }
 
-/* Modal Window Styles */
 .app-modal {
     display: none;
     position: fixed;
@@ -230,9 +235,10 @@ body.dashboard-body {
     background: rgba(15, 23, 42, 0.7);
     backdrop-filter: blur(4px);
     z-index: 200;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 16px;
+    overflow-y: auto;
+    padding: 20px 16px 40px 16px;
 }
 
 .app-modal.active {
@@ -244,16 +250,17 @@ body.dashboard-body {
     border-radius: var(--radius-lg);
     width: 100%;
     max-width: 420px;
-    max-height: 90vh;
+    max-height: 85vh;
     overflow-y: auto;
     padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 12px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+    margin-top: 10px;
+    margin-bottom: env(safe-area-inset-bottom);
 }
 
-/* Custom Error Modal Override (Guarantees top layer visibility) */
 #errorModal.app-modal {
     z-index: 99999 !important;
 }
@@ -267,7 +274,6 @@ body.dashboard-body {
     line-height: 1;
 }
 
-/* Recurrence Section Spacing */
 .recurrence-section {
     display: flex;
     flex-direction: column;
@@ -305,7 +311,6 @@ body.dashboard-body {
     opacity: 1;
 }
 
-/* Split Amount / Deduct 2 Slot Spacing */
 .amount2-slot {
     display: none;
     opacity: 0;
@@ -378,30 +383,7 @@ body.dashboard-body {
     color: var(--text-primary);
     background: #f8fafc;
     outline: none;
-    font-family: inherit;
 }
-
-.analytics-chart-placeholder {
-    height: 90px;
-    background: #f8fafc;
-    border-radius: var(--radius-md);
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-around;
-    padding: 8px;
-    border: 1px dashed var(--border-light);
-}
-
-.chart-bar-group {
-    display: flex;
-    gap: 4px;
-    height: 100%;
-    align-items: flex-end;
-}
-
-.bar { width: 100%; max-width: 10px; border-radius: 3px; }
-.income-bar { background: var(--accent); }
-.expense-bar { background: #ef4444; }
 
 .bill-form .form-column,
 .profile-income-form {
@@ -412,35 +394,56 @@ body.dashboard-body {
 
 .form-row-horizontal {
     display: grid;
-    grid-template-columns: 50px 1fr;
+    grid-template-columns: 78px 1fr;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
 }
 
 .form-row-horizontal label {
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
     text-align: left;
+    white-space: nowrap;
 }
 
 .bill-form input,
 .profile-income-form input,
 .transaction-form input,
 .transaction-form select {
-    height: 34px;
-    padding: 0 8px;
+    height: 28px;
+    padding: 0 6px;
     border: 1.5px solid var(--border-light);
     border-radius: 6px;
-    font-size: 12px;
+    font-size: 10.5px;
     outline: none;
     background: #ffffff;
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    font-family: inherit;
+    text-align: center;
+}
+
+/* Disabled Input Styles */
+.transaction-form input:disabled,
+.bill-form input:disabled {
+    background-color: #f1f5f9 !important;
+    color: var(--text-muted) !important;
+    border-color: var(--border-light) !important;
+    cursor: not-allowed !important;
+}
+
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+}
+input[type=number] {
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 .bill-form input:focus,
@@ -455,13 +458,12 @@ body.dashboard-body {
     color: #ffffff;
     border: none;
     padding: 0 12px;
-    height: 34px;
+    height: 32px;
     border-radius: 6px;
     font-weight: 700;
     font-size: 12px;
     cursor: pointer;
     transition: var(--transition-fast);
-    font-family: inherit;
 }
 
 .add-btn.full-width { width: 100%; margin-top: 2px; }
@@ -547,7 +549,7 @@ body.dashboard-body {
 .bill-amount { font-weight: 800; color: #ef4444; }
 .bill-item-row.is-paid .bill-amount { color: var(--accent); text-decoration: line-through; }
 
-.delete-bill-btn, .edit-bill-btn {
+.delete-bill-btn {
     background: none;
     border: none;
     color: #cbd5e1;
@@ -560,9 +562,60 @@ body.dashboard-body {
     transition: var(--transition-fast);
 }
 
-.delete-bill-btn svg, .edit-bill-btn svg { width: 14px; height: 14px; }
+.delete-bill-btn svg { width: 14px; height: 14px; }
 .delete-bill-btn:hover { color: #ef4444; background: #fef2f2; }
-.edit-bill-btn:hover { color: var(--primary); background: #e0e7ff; }
+
+/* --- HISTORY ITEM ROW STYLES --- */
+.history-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1.5px solid var(--border-light);
+    font-size: 12px;
+    transition: var(--transition-fast);
+}
+
+.history-item-row.income {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.history-item-row.expense {
+    background: #f8fafc;
+    border-color: var(--border-light);
+}
+
+.history-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.history-desc {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.history-date {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.history-amount {
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.history-amount.income-amount {
+    color: var(--accent);
+}
+
+.history-amount.expense-amount {
+    color: #ef4444;
+}
 
 .empty-state { text-align: center; font-size: 11px; color: var(--text-muted); padding: 10px 0; }
 
@@ -574,7 +627,6 @@ body.dashboard-body {
 .profile-name { font-size: 13px; font-weight: 800; color: var(--text-primary); }
 .profile-subtext { font-size: 10px; color: var(--text-muted); }
 
-.logout-wrapper { display: flex; justify-content: center; margin-top: 4px; }
 .logout-icon-btn {
     width: 34px; height: 34px; background: #ffffff; border: 1.5px solid var(--border-light);
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -582,10 +634,6 @@ body.dashboard-body {
 }
 .logout-icon-btn svg { width: 14px; height: 14px; }
 .logout-icon-btn:hover { background: #fef2f2; border-color: #fecaca; color: #ef4444; }
-
-.close-fullscreen-btn {
-    background: none; border: none; font-size: 22px; line-height: 1; color: var(--text-muted); cursor: pointer;
-}
 
 .bottom-nav {
     position: fixed; bottom: 10px; left: 10px; right: 10px; height: 54px;
@@ -599,7 +647,7 @@ body.dashboard-body {
     background: none; border: none; display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 1px; color: #94a3b8; font-size: 8px; font-weight: 500;
     cursor: pointer; transition: var(--transition-fast); padding: 0; width: 50px; height: 40px;
-    flex-shrink: 0; font-family: inherit;
+    flex-shrink: 0;
 }
 .nav-btn span:last-child { display: block; height: 10px; line-height: 10px; }
 .nav-btn:hover { color: #ffffff; }
@@ -629,4 +677,101 @@ body.dashboard-body {
     background: var(--primary);
     color: #ffffff;
     box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+}
+
+/* Date Range Container */
+.profile-date-range-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: #f8fafc;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+    margin-bottom: 14px;
+    box-sizing: border-box;
+}
+
+.date-input-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 50%;
+    box-sizing: border-box;
+}
+
+#rangeStartDate,
+#rangeEndDate {
+    width: 105px !important;
+    min-width: unset !important;
+    max-width: 105px !important;
+    height: 28px;
+    font-size: 10px;
+    padding: 2px 4px;
+    box-sizing: border-box;
+}
+
+/* Dual-Column Income Row Grid */
+.form-row-horizontal.draggable-row {
+    display: grid;
+    grid-template-columns: 20px 85px 1fr 1fr;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    padding: 4px 6px;
+    border-radius: 6px;
+    border: 1.5px solid var(--border-light);
+    cursor: default;
+    transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.form-row-horizontal.draggable-row.dragging {
+    opacity: 0.4;
+    border: 1.5px dashed var(--primary);
+}
+
+.drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    padding: 2px;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.income-balance-display {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    background: #f8fafc;
+    border: 1.5px solid var(--border-light);
+    border-radius: 6px;
+    font-size: 10.5px;
+    font-weight: 800;
+    color: var(--accent);
+    box-sizing: border-box;
+}
+
+.income-balance-display.negative-balance {
+    color: #ef4444;
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.income-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
 }
