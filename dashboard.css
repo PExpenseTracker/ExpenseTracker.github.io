@@ -426,11 +426,9 @@ body.dashboard-body {
     text-align: center;
 }
 
-/* Force consistency on date inputs for mobile browsers */
-input[type="date"] {
-    appearance: none;
-    -webkit-appearance: none;
-    text-align: center;
+/* FIX: Ensure date inputs inside Quick Entry / To Be Paid are strictly centered */
+.transaction-form input[type="date"] {
+    text-align: center !important;
 }
 
 /* Disabled Input Styles */
@@ -514,11 +512,12 @@ input[type=number] {
     border-color: #bbf7d0;
 }
 
-/* REVERTED: Original bill-info style so layout is clean and intact */
 .bill-info {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    align-items: flex-start; /* FIX: Force items inside bill-info to align cleanly to the left */
+    text-align: left;
 }
 
 .bill-name-wrapper {
@@ -552,10 +551,12 @@ input[type=number] {
     text-transform: uppercase;
 }
 
-/* REVERTED: Original bill-date style */
+/* FIX: Align Due date text strictly to the left with no unwanted center spacing */
 .bill-date { 
     font-size: 10px; 
     color: var(--text-muted); 
+    text-align: left !important;
+    width: 100%;
 }
 
 .bill-actions { display: flex; align-items: center; gap: 8px; }
