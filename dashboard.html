@@ -140,6 +140,11 @@
                             <div class="action-icon">💸</div>
                             <span class="action-name">Daily</span>
                         </button>
+
+                        <button type="button" class="quick-action-btn" id="openIncomeEntryModalBtn">
+                            <div class="action-icon">💰</div>
+                            <span class="action-name">Income</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -409,6 +414,36 @@
                     </div>
 
                     <button type="submit" class="add-btn full-width" id="saveDailyBtn">Save Transaction</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Quick Income Entry -->
+    <div id="incomeEntryModal" class="app-modal">
+        <div class="modal-content" style="max-width: 360px;">
+            <div class="section-header">
+                <h3>Quick Income Entry</h3>
+                <button type="button" class="close-modal-btn">&times;</button>
+            </div>
+            <form id="quickIncomeForm" class="transaction-form" autocomplete="off">
+                <div class="form-column" style="display: flex; flex-direction: column; gap: 10px;">
+                    <div class="form-row-horizontal">
+                        <label for="quickIncomeCategory">Source</label>
+                        <select id="quickIncomeCategory" class="filter-select" style="height: 34px; width: 100%;"></select>
+                    </div>
+
+                    <div class="form-row-horizontal">
+                        <label for="quickIncomeAmount">Amount</label>
+                        <input type="text" id="quickIncomeAmount" class="currency-input" placeholder="" autocomplete="off" required>
+                    </div>
+
+                    <div class="form-row-horizontal">
+                        <label for="quickIncomeDate">Date</label>
+                        <input type="date" id="quickIncomeDate" required>
+                    </div>
+
+                    <button type="submit" class="add-btn full-width" id="saveQuickIncomeBtn">Save Income</button>
                 </div>
             </form>
         </div>
