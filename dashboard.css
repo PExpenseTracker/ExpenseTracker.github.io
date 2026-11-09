@@ -357,6 +357,22 @@ body.dashboard-body {
 .progress-slash { text-align: center; color: var(--text-muted); font-weight: 600; }
 .progress-values span:last-child { text-align: left; }
 
+.edit-icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: var(--transition-fast);
+}
+
+.edit-icon-btn svg { width: 14px; height: 14px; }
+.edit-icon-btn:hover { color: var(--primary); background: #f1f5f9; }
+
 .filter-select {
     height: 28px;
     padding: 0 6px;
@@ -408,17 +424,6 @@ body.dashboard-body {
     min-width: 0;
     box-sizing: border-box;
     text-align: center;
-}
-
-/* CENTERING: Force all date fields across modals and forms to center */
-input[type="date"],
-.transaction-form input[type="date"],
-.bill-form input[type="date"],
-.profile-income-form input[type="date"],
-#quickDueDate,
-#quickIncomeDate,
-#billDueDate {
-    text-align: center !important;
 }
 
 /* Disabled Input Styles */
@@ -506,8 +511,6 @@ input[type=number] {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    align-items: flex-start !important;
-    text-align: left !important;
 }
 
 .bill-name-wrapper {
@@ -541,20 +544,7 @@ input[type=number] {
     text-transform: uppercase;
 }
 
-/* STRICT LEFT ALIGNMENT for Bill due text */
-.bill-date { 
-    font-size: 10px; 
-    color: var(--text-muted); 
-    text-align: left !important;
-    width: 100%;
-}
-
-/* History date can remain neutral or centered */
-.history-date { 
-    font-size: 10px; 
-    color: var(--text-muted); 
-}
-
+.bill-date { font-size: 10px; color: var(--text-muted); }
 .bill-actions { display: flex; align-items: center; gap: 8px; }
 .bill-amount { font-weight: 800; color: #ef4444; }
 .bill-item-row.is-paid .bill-amount { color: var(--accent); text-decoration: line-through; }
@@ -607,6 +597,11 @@ input[type=number] {
 .history-desc {
     font-weight: 700;
     color: var(--text-primary);
+}
+
+.history-date {
+    font-size: 10px;
+    color: var(--text-muted);
 }
 
 .history-amount {
