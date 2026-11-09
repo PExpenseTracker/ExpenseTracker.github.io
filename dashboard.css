@@ -426,8 +426,14 @@ body.dashboard-body {
     text-align: center;
 }
 
-/* FIX: Ensure date inputs inside Quick Entry / To Be Paid are strictly centered */
-.transaction-form input[type="date"] {
+/* CENTERING: Force all date fields across modals and forms to center */
+input[type="date"],
+.transaction-form input[type="date"],
+.bill-form input[type="date"],
+.profile-income-form input[type="date"],
+#quickDueDate,
+#quickIncomeDate,
+#billDueDate {
     text-align: center !important;
 }
 
@@ -516,7 +522,7 @@ input[type=number] {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    align-items: flex-start; /* FIX: Force items inside bill-info to align cleanly to the left */
+    align-items: flex-start;
     text-align: left;
 }
 
@@ -551,11 +557,12 @@ input[type=number] {
     text-transform: uppercase;
 }
 
-/* FIX: Align Due date text strictly to the left with no unwanted center spacing */
-.bill-date { 
+/* CENTERING: Center align date text explicitly inside Bills / To Be Paid entries */
+.bill-date,
+.history-date { 
     font-size: 10px; 
     color: var(--text-muted); 
-    text-align: left !important;
+    text-align: center !important;
     width: 100%;
 }
 
@@ -611,11 +618,6 @@ input[type=number] {
 .history-desc {
     font-weight: 700;
     color: var(--text-primary);
-}
-
-.history-date {
-    font-size: 10px;
-    color: var(--text-muted);
 }
 
 .history-amount {
