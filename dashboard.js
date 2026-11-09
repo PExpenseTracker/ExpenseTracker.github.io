@@ -109,6 +109,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const incomeMonthSelect = document.getElementById('incomeMonth');
     const incomePaycheckTypeSelect = document.getElementById('incomePaycheckType');
 
+    // Restore saved paycheck type or default to 'Monthly Paycheck'
+    let currentPaycheckType = localStorage.getItem(`activePaycheckType_${currentAccount}`) || 'Monthly Paycheck';
+    if (incomePaycheckTypeSelect) {
+        incomePaycheckTypeSelect.value = currentPaycheckType;
+    }
+
     const addIncomeSourceBtn = document.getElementById('addIncomeSourceBtn');
     const removeIncomeSourceBtn = document.getElementById('removeIncomeSourceBtn');
     const incomeSourceModal = document.getElementById('incomeSourceModal');
@@ -277,6 +283,73 @@ document.addEventListener('DOMContentLoaded', async () => {
                 selectEl.value = prevVal;
             }
         });
+    }
+
+    // Helper: Calculates current available balance for an income category
+    function calculateCategoryAvailableBalance(categoryName) {
+        const activeMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
+        const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
+        const activeRange = getActiveDateRange();
+
+        const fieldKey = categoryName.toLowerCase().replace(/\s+/g, '_');
+        const inputEl = document.getElementById(`income_${fieldKey}`);
+        const encodedAmount = inputEl ? parseCurrencyValue(inputEl.value) : 0;
+
+        const totalDeducted = transactions
+            .filter(t => {
+                if (t.type !== 'expense' || !t.source) return false;
+                const sources = t.source.toLowerCase().split('/');
+                if (!sources.includes(categoryName.toLowerCase())) return false;
+                if (!t.date) return false;
+                if (paycheckType !== 'Total Paycheck' && activeRange.startDate && activeRange.endDate) {
+                    return t.date >= activeRange.startDate && t.date <= activeRange.endDate;
+                }
+                if (paycheckType === 'Total Paycheck') return true;
+                const txMonth = new Date(t.date).getMonth();
+                return txMonth === activeMonth;
+            })
+            .reduce((sum, t) => {
+                if (t.source.includes('/')) {
+                    const parts = t.source.split('/');
+                    if (parts[0].toLowerCase() === categoryName.toLowerCase()) {
+                        return sum + (parseCurrencyValue(t.amount1) || (parseCurrencyValue(t.amount) / 2));
+                    } else if (parts[1] && parts[1].toLowerCase() === categoryName.toLowerCase()) {
+                        return sum + (parseCurrencyValue(t.amount2) || (parseCurrencyValue(t.amount) / 2));
+                    }
+                }
+                return sum + parseCurrencyValue(t.amount);
+            }, 0);
+
+        return encodedAmount - totalDeducted;
+    }
+
+    // Smart Selector: Auto-selects exact match or highest balance source for Deduct 1
+    function autoSelectBestDeductSource(targetAmount) {
+        const deductSource1 = document.getElementById('deductSource1');
+        if (!deductSource1 || customIncomeCategories.length === 0) return;
+
+        let exactMatchCategory = null;
+        let highestBalanceCategory = null;
+        let highestBalance = -Infinity;
+
+        customIncomeCategories.forEach(cat => {
+            const cName = getCategoryName(cat);
+            const bal = calculateCategoryAvailableBalance(cName);
+
+            if (Math.abs(bal - targetAmount) < 0.01) {
+                exactMatchCategory = cName;
+            }
+
+            if (bal > highestBalance) {
+                highestBalance = bal;
+                highestBalanceCategory = cName;
+            }
+        });
+
+        const bestSource = exactMatchCategory || highestBalanceCategory;
+        if (bestSource) {
+            deductSource1.value = bestSource;
+        }
     }
 
     if (addIncomeSourceBtn) {
@@ -652,6 +725,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (quickDueDateInput) quickDueDateInput.value = b.dueDate;
                     setQuickTxFieldsLock(false);
                 }
+
+                // Automatically trigger smart source calculation on bill selection
+                autoSelectBestDeductSource(b.amount);
+
                 quickBillsDropdown.style.display = 'none';
             });
 
@@ -1061,6 +1138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (incomePaycheckTypeSelect) {
         incomePaycheckTypeSelect.addEventListener('change', () => {
+            localStorage.setItem(`activePaycheckType_${currentAccount}`, incomePaycheckTypeSelect.value);
             loadFormForSelectedMonth();
             updateSummaryCards();
             renderBills();
@@ -1072,6 +1150,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentAccount = e.target.value;
             localStorage.setItem('activeAccount', currentAccount);
             if (profileAccountName) profileAccountName.textContent = currentAccount;
+
+            const savedPaycheck = localStorage.getItem(`activePaycheckType_${currentAccount}`) || 'Monthly Paycheck';
+            if (incomePaycheckTypeSelect) incomePaycheckTypeSelect.value = savedPaycheck;
 
             bills = [];
             transactions = [];
@@ -1537,7 +1618,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 amount: newBillDb.amount,
                 dueDate: newBillDb.due_date,
                 isPaid: true,
-                recurrence: newBillDb.recurrence,
+                recurrence: 'one-time',
                 counter: null
             });
 
