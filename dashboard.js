@@ -363,6 +363,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         addIncomeSourceBtn.addEventListener('click', () => {
             if (customIncomeSourceForm) customIncomeSourceForm.reset();
             if (interestFieldsSlot) interestFieldsSlot.style.display = 'none';
+            // Reset modal title/button for Add mode
+            const titleEl = incomeSourceModal.querySelector('h3') || incomeSourceModal.querySelector('.modal-header h3');
+            if (titleEl) titleEl.textContent = 'Add Income Source';
+            const submitBtn = customIncomeSourceForm.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.textContent = 'Save Source';
+            delete customIncomeSourceForm.dataset.editingCategory;
+
             if (incomeSourceModal) incomeSourceModal.classList.add('active');
         });
     }
@@ -404,16 +411,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                 whtax: parseFloat(document.getElementById('interestWHTax').value) || 20
             } : null;
 
-            const existingNames = customIncomeCategories.map(c => getCategoryName(c));
-            if (!existingNames.includes(categoryName)) {
-                const newCatObj = interestConfig ? { name: categoryName, interest: interestConfig } : categoryName;
-                customIncomeCategories.push(newCatObj);
+            const editingOldName = customIncomeSourceForm.dataset.editingCategory;
 
-                addDynamicIncomeFieldUI(categoryName);
-                localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
-                updateIncomeDropdownOptions();
-                await syncCategoryOrderToSupabase();
+            if (editingOldName) {
+                // EDITING EXISTING CATEGORY NAME
+                const targetObj = customIncomeCategories.find(c => getCategoryName(c).toLowerCase() === editingOldName.toLowerCase());
+                if (targetObj) {
+                    if (typeof targetObj === 'object') {
+                        targetObj.name = categoryName;
+                    } else {
+                        const idx = customIncomeCategories.indexOf(targetObj);
+                        if (idx !== -1) {
+                            customIncomeCategories[idx] = interestConfig ? { name: categoryName, interest: interestConfig } : categoryName;
+                        }
+                    }
+                }
+                delete customIncomeSourceForm.dataset.editingCategory;
+            } else {
+                // ADDING NEW CATEGORY TO THE TOP (unshift)
+                const existingNames = customIncomeCategories.map(c => getCategoryName(c).toLowerCase());
+                if (!existingNames.includes(categoryName.toLowerCase())) {
+                    const newCatObj = interestConfig ? { name: categoryName, interest: interestConfig } : categoryName;
+                    customIncomeCategories.unshift(newCatObj); // Adds to top line/row
+                }
             }
+
+            localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
+
+            // Rebuild UI container elements completely to reflect new order/names
+            if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
+            if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
+
+            customIncomeCategories.forEach(cat => {
+                addDynamicIncomeFieldUI(getCategoryName(cat));
+            });
+
+            updateIncomeDropdownOptions();
+            await syncCategoryOrderToSupabase();
 
             if (incomeSourceModal) incomeSourceModal.classList.remove('active');
             if (enableInterestCheck) enableInterestCheck.checked = false;
@@ -459,7 +493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const categoryData = {};
             const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
             dynamicInputs.forEach(inp => {
-                const key = inp.id.replace('income_', '');
+                const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
                 categoryData[key] = parseCurrencyValue(inp.value);
             });
 
@@ -479,6 +513,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    window.editIncomeCategoryName = function(categoryName) {
+        if (customIncomeSourceForm) customIncomeSourceForm.reset();
+        customIncomeSourceNameInput.value = categoryName;
+        customIncomeSourceForm.dataset.editingCategory = categoryName;
+
+        const titleEl = incomeSourceModal.querySelector('h3') || incomeSourceModal.querySelector('.modal-header h3');
+        if (titleEl) titleEl.textContent = `Edit Income Source: ${categoryName}`;
+        const submitBtn = customIncomeSourceForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = 'Update Source Name';
+
+        if (interestFieldsSlot) interestFieldsSlot.style.display = 'none';
+        if (incomeSourceModal) incomeSourceModal.classList.add('active');
+    };
+
     function addDynamicIncomeFieldUI(categoryName) {
         const fieldKey = categoryName.toLowerCase().replace(/\s+/g, '_');
         
@@ -491,7 +539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             fieldRow.innerHTML = `
                 <span class="drag-handle" title="Drag to reorder">☰</span>
-                <label for="income_${fieldKey}" style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${categoryName}</label>
+                <label for="income_${fieldKey}" onclick="editIncomeCategoryName('${categoryName}')" style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" title="Click to edit name">${categoryName} ✏️</label>
                 <input type="text" id="income_${fieldKey}" data-category="${categoryName}" class="currency-input income-dynamic-input" placeholder="" autocomplete="off" ${isEditingIncome ? '' : 'disabled'}>
                 <div id="balance_income_${fieldKey}" class="income-balance-display" title="Remaining Balance"></div>
             `;
@@ -520,7 +568,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const categoryData = {};
                     const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
                     dynamicInputs.forEach(inp => {
-                        const key = inp.id.replace('income_', '');
+                        const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
                         categoryData[key] = parseCurrencyValue(inp.value);
                     });
 
@@ -568,13 +616,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // MOBILE TOUCH SCREEN DRAG & DROP SUPPORT
             const dragHandle = fieldRow.querySelector('.drag-handle');
             if (dragHandle) {
-                let touchStartY = 0;
-
-                dragHandle.addEventListener('touchstart', (e) => {
-                    touchStartY = e.touches[0].clientY;
-                    fieldRow.classList.add('dragging');
-                }, { passive: true });
-
                 dragHandle.addEventListener('touchmove', (e) => {
                     const touchY = e.touches[0].clientY;
                     const rows = Array.from(dynamicIncomeFieldsContainer.querySelectorAll('.draggable-row'));
@@ -994,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const categoryData = {};
                     const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
                     dynamicInputs.forEach(inp => {
-                        const key = inp.id.replace('income_', '');
+                        const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
                         categoryData[key] = parseCurrencyValue(inp.value);
                     });
 
@@ -1149,7 +1190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
             dynamicInputs.forEach(inp => {
-                const key = inp.id.replace('income_', '');
+                const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
                 inp.value = dynamicSums[key] ? formatCurrency(dynamicSums[key]) : '';
             });
 
@@ -1177,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
         dynamicInputs.forEach(inp => {
-            const key = inp.id.replace('income_', '');
+            const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
             inp.value = data[key] ? formatCurrency(data[key]) : '';
         });
 
@@ -1821,7 +1862,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const categoryData = {};
                 const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
                 dynamicInputs.forEach(inp => {
-                    const key = inp.id.replace('income_', '');
+                    const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
                     categoryData[key] = parseCurrencyValue(inp.value);
                 });
 
@@ -1924,7 +1965,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ${bill.isPaid ? '<span class="paid-badge">Paid</span>' : ''}
                         <span class="recurrence-badge">${displayRecurrence}</span>
                     </div>
-                    <span class="bill-date" style="text-align: center; width: 100%;">${dateDisplayStr}</span>
+                    <span class="bill-date">${dateDisplayStr}</span>
                 </div>
                 <div class="bill-actions">
                     <span class="bill-amount">-₱${formattedAmount}</span>
@@ -2088,7 +2129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
         dynamicInputs.forEach(inp => {
-            const key = inp.id.replace('income_', '');
+            const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
             categoryData[key] = parseCurrencyValue(inp.value);
         });
 
