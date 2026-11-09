@@ -1781,14 +1781,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!selectedCategory || addAmount <= 0 || !incomeDateStr) return;
 
-            const targetDate = new Date(incomeDateStr);
-            const targetMonth = isNaN(targetDate.getTime()) ? currentMonth : targetDate.getMonth();
+            // Normalize target date parse and range matching
+            const [y, m, d] = incomeDateStr.split('-').map(Number);
+            const targetMonth = m ? m - 1 : currentMonth;
 
-            let targetPaycheckType = 'Monthly Paycheck';
+            let targetPaycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
+            if (targetPaycheckType === 'Total Paycheck') {
+                targetPaycheckType = 'Monthly Paycheck';
+            }
+
             if (paycheckRanges[targetMonth]) {
                 for (const [pType, range] of Object.entries(paycheckRanges[targetMonth])) {
-                    if (range.startDate && range.endDate) {
-                        if (incomeDateStr >= range.startDate && incomeDateStr <= range.endDate) {
+                    if (range && range.startDate && range.endDate) {
+                        const start = range.startDate.slice(0, 10);
+                        const end = range.endDate.slice(0, 10);
+                        const target = incomeDateStr.slice(0, 10);
+
+                        if (target >= start && target <= end) {
                             targetPaycheckType = pType;
                             break;
                         }
