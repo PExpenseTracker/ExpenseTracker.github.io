@@ -109,7 +109,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const incomeMonthSelect = document.getElementById('incomeMonth');
     const incomePaycheckTypeSelect = document.getElementById('incomePaycheckType');
 
-    // Restore saved paycheck type or default to 'Monthly Paycheck'
     let currentPaycheckType = localStorage.getItem(`activePaycheckType_${currentAccount}`) || 'Monthly Paycheck';
     if (incomePaycheckTypeSelect) {
         incomePaycheckTypeSelect.value = currentPaycheckType;
@@ -142,11 +141,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let customIncomeCategories = []; 
     let isEditingIncome = false;
 
-    // FORCED MM/DD/YYYY DATE FORMATTER (Bypasses device regional settings)
     function formatToMMDDYYYY(dateStrOrObj) {
         if (!dateStrOrObj) return '';
         const date = new Date(dateStrOrObj);
-        if (isNaN(date.getTime())) return dateStrOrObj; // fallback if invalid
+        if (isNaN(date.getTime())) return dateStrOrObj;
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         const year = date.getFullYear();
@@ -538,6 +536,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
+            // Desktop Drag Events
             fieldRow.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', categoryName);
                 fieldRow.classList.add('dragging');
@@ -565,6 +564,41 @@ document.addEventListener('DOMContentLoaded', async () => {
                     dynamicIncomeFieldsContainer.insertBefore(draggingRow, fieldRow);
                 }
             });
+
+            // MOBILE TOUCH SCREEN DRAG & DROP SUPPORT
+            const dragHandle = fieldRow.querySelector('.drag-handle');
+            if (dragHandle) {
+                let touchStartY = 0;
+
+                dragHandle.addEventListener('touchstart', (e) => {
+                    touchStartY = e.touches[0].clientY;
+                    fieldRow.classList.add('dragging');
+                }, { passive: true });
+
+                dragHandle.addEventListener('touchmove', (e) => {
+                    const touchY = e.touches[0].clientY;
+                    const rows = Array.from(dynamicIncomeFieldsContainer.querySelectorAll('.draggable-row'));
+                    
+                    rows.forEach(row => {
+                        if (row === fieldRow) return;
+                        const box = row.getBoundingClientRect();
+                        if (touchY >= box.top && touchY <= box.bottom) {
+                            if (touchY < box.top + box.height / 2) {
+                                dynamicIncomeFieldsContainer.insertBefore(fieldRow, row);
+                            } else {
+                                dynamicIncomeFieldsContainer.insertBefore(fieldRow, row.nextSibling);
+                            }
+                        }
+                    });
+                }, { passive: true });
+
+                dragHandle.addEventListener('touchend', async () => {
+                    fieldRow.classList.remove('dragging');
+                    saveNewCategoryOrder();
+                    updateIncomeDropdownOptions();
+                    await syncCategoryOrderToSupabase();
+                });
+            }
         }
 
         if (homeIncomeProgressList && !document.getElementById(`home_${fieldKey}_Actual`)) {
@@ -1313,7 +1347,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (profileRes.data) {
-                // Check if any row has global category order stored
                 let globalOrderFound = null;
 
                 profileRes.data.forEach(row => {
@@ -1345,7 +1378,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
 
-                // If Supabase has an explicit category order, use it to sync across devices/browsers!
                 if (globalOrderFound) {
                     customIncomeCategories = globalOrderFound.map(catName => {
                         const existing = customIncomeCategories.find(c => getCategoryName(c).toLowerCase() === catName.toLowerCase());
@@ -1892,7 +1924,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ${bill.isPaid ? '<span class="paid-badge">Paid</span>' : ''}
                         <span class="recurrence-badge">${displayRecurrence}</span>
                     </div>
-                    <span class="bill-date">${dateDisplayStr}</span>
+                    <span class="bill-date" style="text-align: center; width: 100%;">${dateDisplayStr}</span>
                 </div>
                 <div class="bill-actions">
                     <span class="bill-amount">-₱${formattedAmount}</span>
