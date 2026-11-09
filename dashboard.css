@@ -13,7 +13,7 @@
 }
 
 /* Eliminate WebKit Mobile Tap Flash Highlight & Focus Outlines */
-- {
+* {
     -webkit-tap-highlight-color: transparent;
     outline: none;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
