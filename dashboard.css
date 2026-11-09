@@ -13,7 +13,7 @@
 }
 
 /* Eliminate WebKit Mobile Tap Flash Highlight & Focus Outlines */
-- {
+* {
     -webkit-tap-highlight-color: transparent;
     outline: none;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
@@ -487,7 +487,6 @@ input[type=number] {
 
 .bill-item-row {
     display: flex;
-    justify-image: space-between;
     justify-content: space-between;
     align-items: center;
     padding: 8px 10px;
