@@ -142,6 +142,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     let customIncomeCategories = []; 
     let isEditingIncome = false;
 
+    // FORCED MM/DD/YYYY DATE FORMATTER (Bypasses device regional settings)
+    function formatToMMDDYYYY(dateStrOrObj) {
+        if (!dateStrOrObj) return '';
+        const date = new Date(dateStrOrObj);
+        if (isNaN(date.getTime())) return dateStrOrObj; // fallback if invalid
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${month}/${day}/${year}`;
+    }
+
     function formatDescriptionText(rawStr) {
         if (!rawStr) return '';
         return rawStr
@@ -381,7 +392,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (customIncomeSourceForm) {
-        customIncomeSourceForm.addEventListener('submit', (e) => {
+        customIncomeSourceForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const rawName = customIncomeSourceNameInput.value.trim();
             if (!rawName) return;
@@ -403,6 +414,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 addDynamicIncomeFieldUI(categoryName);
                 localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
                 updateIncomeDropdownOptions();
+                await syncCategoryOrderToSupabase();
             }
 
             if (incomeSourceModal) incomeSourceModal.classList.remove('active');
@@ -415,7 +427,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (deleteIncomeSourceForm) {
-        deleteIncomeSourceForm.addEventListener('submit', (e) => {
+        deleteIncomeSourceForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const categoryToRemove = deleteIncomeSourceSelect.value;
             if (!categoryToRemove) return;
@@ -431,11 +443,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (homeRow) homeRow.remove();
 
             updateIncomeDropdownOptions();
+            await syncCategoryOrderToSupabase();
             if (deleteIncomeSourceModal) deleteIncomeSourceModal.classList.remove('active');
 
             loadFormForSelectedMonth();
             updateSummaryCards();
         });
+    }
+
+    async function syncCategoryOrderToSupabase() {
+        try {
+            const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+            const selectedMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
+            const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
+            if (paycheckType === 'Total Paycheck') return;
+
+            const categoryData = {};
+            const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
+            dynamicInputs.forEach(inp => {
+                const key = inp.id.replace('income_', '');
+                categoryData[key] = parseCurrencyValue(inp.value);
+            });
+
+            const rangeInfo = paycheckRanges[selectedMonth]?.[paycheckType] || {};
+
+            await supabaseClient.from(prefix + 'profile_incomes').upsert({
+                month_index: selectedMonth,
+                paycheck_type: paycheckType,
+                category_data: categoryData,
+                category_order: customIncomeCategories.map(c => getCategoryName(c)),
+                start_date: rangeInfo.startDate || null,
+                end_date: rangeInfo.endDate || null,
+                updated_at: new Date()
+            });
+        } catch (err) {
+            console.error('Error syncing category order to Supabase:', err);
+        }
     }
 
     function addDynamicIncomeFieldUI(categoryName) {
@@ -474,12 +517,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     localStorage.setItem(`cached_incomes_${currentAccount}`, JSON.stringify(monthlyIncomes));
 
                     const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+                    const rangeInfo = paycheckRanges[selectedMonth]?.[paycheckType] || {};
+
+                    const categoryData = {};
+                    const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
+                    dynamicInputs.forEach(inp => {
+                        const key = inp.id.replace('income_', '');
+                        categoryData[key] = parseCurrencyValue(inp.value);
+                    });
+
                     await supabaseClient.from(prefix + 'profile_incomes').upsert({
                         month_index: selectedMonth,
                         paycheck_type: paycheckType,
-                        category_data: monthlyIncomes[selectedMonth][paycheckType],
-                        start_date: rangeStartDateInput ? rangeStartDateInput.value : null,
-                        end_date: rangeEndDateInput ? rangeEndDateInput.value : null,
+                        category_data: categoryData,
+                        category_order: customIncomeCategories.map(c => getCategoryName(c)),
+                        start_date: rangeInfo.startDate || null,
+                        end_date: rangeInfo.endDate || null,
                         updated_at: new Date()
                     });
                 });
@@ -490,9 +543,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 fieldRow.classList.add('dragging');
             });
 
-            fieldRow.addEventListener('dragend', () => {
+            fieldRow.addEventListener('dragend', async () => {
                 fieldRow.classList.remove('dragging');
                 saveNewCategoryOrder();
+                updateIncomeDropdownOptions();
+                await syncCategoryOrderToSupabase();
             });
 
             fieldRow.addEventListener('dragover', (e) => {
@@ -902,10 +957,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 triggerAutosave(async () => {
                     const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+                    const categoryData = {};
+                    const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
+                    dynamicInputs.forEach(inp => {
+                        const key = inp.id.replace('income_', '');
+                        categoryData[key] = parseCurrencyValue(inp.value);
+                    });
+
                     await supabaseClient.from(prefix + 'profile_incomes').upsert({
                         month_index: selectedMonth,
                         paycheck_type: paycheckType,
-                        category_data: monthlyIncomes[selectedMonth]?.[paycheckType] || {},
+                        category_data: categoryData,
+                        category_order: customIncomeCategories.map(c => getCategoryName(c)),
                         start_date: rangeStartDateInput.value,
                         end_date: rangeEndDateInput.value,
                         updated_at: new Date()
@@ -1250,7 +1313,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (profileRes.data) {
+                // Check if any row has global category order stored
+                let globalOrderFound = null;
+
                 profileRes.data.forEach(row => {
+                    if (row.category_order && Array.isArray(row.category_order) && row.category_order.length > 0) {
+                        globalOrderFound = row.category_order;
+                    }
+
                     const mIdx = row.month_index;
                     const pType = row.paycheck_type || 'Monthly Paycheck';
                     if (!monthlyIncomes[mIdx]) monthlyIncomes[mIdx] = {};
@@ -1258,7 +1328,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     const catData = row.category_data || {};
 
-                    // AUTO-RECOVER CATEGORIES: Extracts category names from Supabase for fresh devices like mobile Chrome
                     Object.keys(catData).forEach(key => {
                         const formattedName = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                         const exists = customIncomeCategories.some(c => getCategoryName(c).toLowerCase() === formattedName.toLowerCase());
@@ -1276,10 +1345,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
 
+                // If Supabase has an explicit category order, use it to sync across devices/browsers!
+                if (globalOrderFound) {
+                    customIncomeCategories = globalOrderFound.map(catName => {
+                        const existing = customIncomeCategories.find(c => getCategoryName(c).toLowerCase() === catName.toLowerCase());
+                        return existing || catName;
+                    });
+                }
+
                 localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
             }
 
-            // Build dynamic fields once categories are synced
             if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
             if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
 
@@ -1327,8 +1403,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const li = document.createElement('li');
             li.className = `history-item-row ${tx.type || 'expense'}`;
 
-            const [year, month, day] = (tx.date || '').split('-');
-            const formattedDate = (year && month && day) ? `${month}/${day}/${year}` : (tx.date || '');
+            const formattedDate = formatToMMDDYYYY(tx.date);
             const formattedAmount = formatCurrency(tx.amount);
             const sign = tx.type === 'income' ? '+' : '-';
             const colorClass = tx.type === 'income' ? 'income-amount' : 'expense-amount';
@@ -1711,12 +1786,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 const rangeInfo = paycheckRanges[targetMonth]?.[targetPaycheckType] || {};
+                const categoryData = {};
+                const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
+                dynamicInputs.forEach(inp => {
+                    const key = inp.id.replace('income_', '');
+                    categoryData[key] = parseCurrencyValue(inp.value);
+                });
 
                 await Promise.all([
                     supabaseClient.from(prefix + 'profile_incomes').upsert({
                         month_index: targetMonth,
                         paycheck_type: targetPaycheckType,
-                        category_data: monthlyIncomes[targetMonth][targetPaycheckType],
+                        category_data: categoryData,
+                        category_order: customIncomeCategories.map(c => getCategoryName(c)),
                         start_date: rangeInfo.startDate || null,
                         end_date: rangeInfo.endDate || null,
                         updated_at: new Date()
@@ -1794,8 +1876,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const li = document.createElement('li');
             li.className = `bill-item-row ${bill.isPaid ? 'is-paid' : ''}`;
             
-            const [year, month, day] = bill.dueDate.split('-');
-            const formattedDate = `${month}/${day}/${year}`;
+            const formattedDate = formatToMMDDYYYY(bill.dueDate);
             const formattedAmount = formatCurrency(bill.amount);
             const displayRecurrence = recurrenceLabels[bill.recurrence] || bill.recurrence;
 
@@ -2001,6 +2082,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 month_index: selectedMonth,
                 paycheck_type: paycheckType,
                 category_data: categoryData,
+                category_order: customIncomeCategories.map(c => getCategoryName(c)),
                 start_date: startDateVal,
                 end_date: endDateVal,
                 updated_at: new Date()
