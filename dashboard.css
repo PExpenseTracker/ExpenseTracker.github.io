@@ -13,7 +13,7 @@
 }
 
 /* Eliminate WebKit Mobile Tap Flash Highlight & Focus Outlines */
-* {
+- {
     -webkit-tap-highlight-color: transparent;
     outline: none;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
@@ -357,22 +357,6 @@ body.dashboard-body {
 .progress-slash { text-align: center; color: var(--text-muted); font-weight: 600; }
 .progress-values span:last-child { text-align: left; }
 
-.edit-icon-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    transition: var(--transition-fast);
-}
-
-.edit-icon-btn svg { width: 14px; height: 14px; }
-.edit-icon-btn:hover { color: var(--primary); background: #f1f5f9; }
-
 .filter-select {
     height: 28px;
     padding: 0 6px;
@@ -503,6 +487,7 @@ input[type=number] {
 
 .bill-item-row {
     display: flex;
+    justify-image: space-between;
     justify-content: space-between;
     align-items: center;
     padding: 8px 10px;
@@ -557,7 +542,7 @@ input[type=number] {
     text-transform: uppercase;
 }
 
-/* CENTERING: Center align date text explicitly inside Bills / To Be Paid entries */
+/* CENTERING: Center align date text explicitly inside Bills entries */
 .bill-date,
 .history-date { 
     font-size: 10px; 
