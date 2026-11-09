@@ -45,6 +45,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const errorMessageText = document.getElementById('errorMessageText');
     const closeErrorModalBtn = document.getElementById('closeErrorModalBtn');
 
+    // Quick Income Elements
+    const openIncomeEntryModalBtn = document.getElementById('openIncomeEntryModalBtn');
+    const incomeEntryModal = document.getElementById('incomeEntryModal');
+    const quickIncomeForm = document.getElementById('quickIncomeForm');
+    const quickIncomeCategorySelect = document.getElementById('quickIncomeCategory');
+    const quickIncomeAmountInput = document.getElementById('quickIncomeAmount');
+    const quickIncomeDateInput = document.getElementById('quickIncomeDate');
+
     function showAppError(message) {
         if (errorMessageText && errorModal) {
             errorMessageText.textContent = message;
@@ -239,6 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupCurrencyFormatting(totalAmountInput);
     setupCurrencyFormatting(document.getElementById('dailyAmount'));
     setupCurrencyFormatting(document.getElementById('billAmount'));
+    setupCurrencyFormatting(quickIncomeAmountInput);
 
     function getCategoryName(cat) {
         return typeof cat === 'object' && cat !== null ? cat.name : cat;
@@ -248,7 +257,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dropdowns = [
             document.getElementById('deductSource1'),
             document.getElementById('deductSource2'),
-            document.getElementById('dailyCategory')
+            document.getElementById('dailyCategory'),
+            quickIncomeCategorySelect
         ];
 
         dropdowns.forEach(selectEl => {
@@ -528,6 +538,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         dailyTxModal.classList.add('active');
     });
+
+    // Quick Income Modal Event Listener
+    if (openIncomeEntryModalBtn && incomeEntryModal) {
+        openIncomeEntryModalBtn.addEventListener('click', () => {
+            quickIncomeForm.reset();
+            if (quickIncomeDateInput) quickIncomeDateInput.value = getTodayLocalDateStr();
+            updateIncomeDropdownOptions();
+            incomeEntryModal.classList.add('active');
+        });
+    }
 
     closeModalBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1283,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await loadDataFromSupabase();
     calculateDailyInterest();
-    renderHistory(); // Force immediate history draw on startup
+    renderHistory();
 
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1297,7 +1317,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById(targetViewId).classList.add('active');
             tabTitle.textContent = targetTitle;
             
-            // Always render history whenever the history view/tab is selected
             if (targetViewId === 'viewHistory' || targetTitle === 'History' || (targetViewId && targetViewId.toLowerCase().includes('history'))) {
                 renderHistory();
             }
@@ -1543,6 +1562,92 @@ document.addEventListener('DOMContentLoaded', async () => {
             showAppError('Failed to save daily transaction.');
         }
     });
+
+    // Quick Income Form Submission Handler
+    if (quickIncomeForm) {
+        quickIncomeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const selectedCategory = quickIncomeCategorySelect.value;
+            const addAmount = parseCurrencyValue(quickIncomeAmountInput.value);
+            const incomeDateStr = quickIncomeDateInput.value;
+
+            if (!selectedCategory || addAmount <= 0 || !incomeDateStr) return;
+
+            const targetDate = new Date(incomeDateStr);
+            const targetMonth = isNaN(targetDate.getTime()) ? currentMonth : targetDate.getMonth();
+
+            let targetPaycheckType = 'Monthly Paycheck';
+            if (paycheckRanges[targetMonth]) {
+                for (const [pType, range] of Object.entries(paycheckRanges[targetMonth])) {
+                    if (range.startDate && range.endDate) {
+                        if (incomeDateStr >= range.startDate && incomeDateStr <= range.endDate) {
+                            targetPaycheckType = pType;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!monthlyIncomes[targetMonth]) monthlyIncomes[targetMonth] = {};
+            if (!monthlyIncomes[targetMonth][targetPaycheckType]) monthlyIncomes[targetMonth][targetPaycheckType] = {};
+
+            const fieldKey = selectedCategory.toLowerCase().replace(/\s+/g, '_');
+            const currentExistingAmount = monthlyIncomes[targetMonth][targetPaycheckType][fieldKey] || 0;
+            const newTotalAmount = currentExistingAmount + addAmount;
+
+            monthlyIncomes[targetMonth][targetPaycheckType][fieldKey] = newTotalAmount;
+
+            // Also record this as an income transaction in history so it tracks correctly
+            const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
+            const uniqueId = 'inc_' + Date.now();
+            const newTxDb = {
+                id: uniqueId,
+                description: `Income: ${selectedCategory}`,
+                amount: addAmount,
+                type: 'income',
+                source: selectedCategory,
+                date: incomeDateStr
+            };
+
+            transactions.push({
+                id: newTxDb.id,
+                desc: newTxDb.description,
+                amount: newTxDb.amount,
+                type: newTxDb.type,
+                source: newTxDb.source,
+                date: newTxDb.date
+            });
+
+            incomeEntryModal.classList.remove('active');
+            quickIncomeForm.reset();
+
+            persistStateToLocalStorage();
+            loadFormForSelectedMonth();
+            updateSummaryCards();
+            renderHistory();
+
+            try {
+                const rangeInfo = paycheckRanges[targetMonth]?.[targetPaycheckType] || {};
+
+                await Promise.all([
+                    supabaseClient.from(prefix + 'profile_incomes').upsert({
+                        month_index: targetMonth,
+                        paycheck_type: targetPaycheckType,
+                        category_data: monthlyIncomes[targetMonth][targetPaycheckType],
+                        start_date: rangeInfo.startDate || null,
+                        end_date: rangeInfo.endDate || null,
+                        updated_at: new Date()
+                    }),
+                    supabaseClient.from(prefix + 'history').insert([newTxDb]),
+                    supabaseClient.from(prefix + 'entries').insert([newTxDb])
+                ]);
+            } catch (err) {
+                console.error('Error syncing quick income entry to Supabase:', err);
+                showAppError('Failed to sync income update to cloud database.');
+            }
+        });
+    }
 
     window.deleteBill = async function(billId) {
         bills = bills.filter(bill => bill.id !== billId);
