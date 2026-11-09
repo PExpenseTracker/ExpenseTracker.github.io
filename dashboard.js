@@ -1835,12 +1835,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 const rangeInfo = paycheckRanges[targetMonth]?.[targetPaycheckType] || {};
-                const categoryData = {};
-                const dynamicInputs = document.querySelectorAll('.income-dynamic-input');
-                dynamicInputs.forEach(inp => {
-                    const key = inp.dataset.category.toLowerCase().replace(/\s+/g, '_');
-                    categoryData[key] = parseCurrencyValue(inp.value);
-                });
+                const categoryData = monthlyIncomes[targetMonth][targetPaycheckType] || {};
 
                 await Promise.all([
                     supabaseClient.from(prefix + 'profile_incomes').upsert({
