@@ -13,7 +13,7 @@
 }
 
 /* Eliminate WebKit Mobile Tap Flash Highlight & Focus Outlines */
-* {
+- {
     -webkit-tap-highlight-color: transparent;
     outline: none;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
@@ -511,6 +511,7 @@ input[type=number] {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    width: 100%; /* Ensured full width for centering alignment */
 }
 
 .bill-name-wrapper {
@@ -544,7 +545,14 @@ input[type=number] {
     text-transform: uppercase;
 }
 
-.bill-date { font-size: 10px; color: var(--text-muted); }
+/* UPDATED: Center align To Be Paid dates on mobile */
+.bill-date { 
+    font-size: 10px; 
+    color: var(--text-muted); 
+    text-align: center;
+    width: 100%;
+}
+
 .bill-actions { display: flex; align-items: center; gap: 8px; }
 .bill-amount { font-weight: 800; color: #ef4444; }
 .bill-item-row.is-paid .bill-amount { color: var(--accent); text-decoration: line-through; }
@@ -774,4 +782,11 @@ input[type=number] {
     align-items: center;
     gap: 4px;
     margin-left: auto;
+}
+
+/* ADDED: Center align quick entry headings or mobile income texts if needed */
+.quick-entry-income-label, 
+.income-center-label {
+    text-align: center !important;
+    width: 100%;
 }
