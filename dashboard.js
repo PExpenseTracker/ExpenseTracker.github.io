@@ -363,7 +363,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         addIncomeSourceBtn.addEventListener('click', () => {
             if (customIncomeSourceForm) customIncomeSourceForm.reset();
             if (interestFieldsSlot) interestFieldsSlot.style.display = 'none';
-            // Reset modal title/button for Add mode
             const titleEl = incomeSourceModal.querySelector('h3') || incomeSourceModal.querySelector('.modal-header h3');
             if (titleEl) titleEl.textContent = 'Add Income Source';
             const submitBtn = customIncomeSourceForm.querySelector('button[type="submit"]');
@@ -414,7 +413,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const editingOldName = customIncomeSourceForm.dataset.editingCategory;
 
             if (editingOldName) {
-                // EDITING EXISTING CATEGORY NAME
                 const targetObj = customIncomeCategories.find(c => getCategoryName(c).toLowerCase() === editingOldName.toLowerCase());
                 if (targetObj) {
                     if (typeof targetObj === 'object') {
@@ -428,17 +426,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 delete customIncomeSourceForm.dataset.editingCategory;
             } else {
-                // ADDING NEW CATEGORY TO THE TOP (unshift)
                 const existingNames = customIncomeCategories.map(c => getCategoryName(c).toLowerCase());
                 if (!existingNames.includes(categoryName.toLowerCase())) {
                     const newCatObj = interestConfig ? { name: categoryName, interest: interestConfig } : categoryName;
-                    customIncomeCategories.unshift(newCatObj); // Adds to top line/row
+                    customIncomeCategories.unshift(newCatObj);
                 }
             }
 
             localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
 
-            // Rebuild UI container elements completely to reflect new order/names
             if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
             if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
 
@@ -513,20 +509,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    window.editIncomeCategoryName = function(categoryName) {
-        if (customIncomeSourceForm) customIncomeSourceForm.reset();
-        customIncomeSourceNameInput.value = categoryName;
-        customIncomeSourceForm.dataset.editingCategory = categoryName;
-
-        const titleEl = incomeSourceModal.querySelector('h3') || incomeSourceModal.querySelector('.modal-header h3');
-        if (titleEl) titleEl.textContent = `Edit Income Source: ${categoryName}`;
-        const submitBtn = customIncomeSourceForm.querySelector('button[type="submit"]');
-        if (submitBtn) submitBtn.textContent = 'Update Source Name';
-
-        if (interestFieldsSlot) interestFieldsSlot.style.display = 'none';
-        if (incomeSourceModal) incomeSourceModal.classList.add('active');
-    };
-
     function addDynamicIncomeFieldUI(categoryName) {
         const fieldKey = categoryName.toLowerCase().replace(/\s+/g, '_');
         
@@ -539,7 +521,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             fieldRow.innerHTML = `
                 <span class="drag-handle" title="Drag to reorder">☰</span>
-                <label for="income_${fieldKey}" onclick="editIncomeCategoryName('${categoryName}')" style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;" title="Click to edit name">${categoryName} ✏️</label>
+                <label for="income_${fieldKey}" style="text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${categoryName}">${categoryName}</label>
                 <input type="text" id="income_${fieldKey}" data-category="${categoryName}" class="currency-input income-dynamic-input" placeholder="" autocomplete="off" ${isEditingIncome ? '' : 'disabled'}>
                 <div id="balance_income_${fieldKey}" class="income-balance-display" title="Remaining Balance"></div>
             `;
@@ -584,7 +566,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
-            // Desktop Drag Events
             fieldRow.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', categoryName);
                 fieldRow.classList.add('dragging');
@@ -613,7 +594,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
 
-            // MOBILE TOUCH SCREEN DRAG & DROP SUPPORT
             const dragHandle = fieldRow.querySelector('.drag-handle');
             if (dragHandle) {
                 dragHandle.addEventListener('touchmove', (e) => {
@@ -704,12 +684,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     function setQuickTxFieldsLock(disabled) {
-        if (quickDueDateInput) {
-            quickDueDateInput.disabled = disabled;
-        }
-        if (totalAmountInput) {
-            totalAmountInput.disabled = disabled;
-        }
+        if (quickDueDateInput) quickDueDateInput.disabled = disabled;
+        if (totalAmountInput) totalAmountInput.disabled = disabled;
     }
 
     openBillTxModalBtn.addEventListener('click', () => {
