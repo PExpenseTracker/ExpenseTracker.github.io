@@ -285,7 +285,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Helper: Calculates current available balance for an income category
     function calculateCategoryAvailableBalance(categoryName) {
         const activeMonth = incomeMonthSelect ? parseInt(incomeMonthSelect.value) : currentMonth;
         const paycheckType = incomePaycheckTypeSelect ? incomePaycheckTypeSelect.value : 'Monthly Paycheck';
@@ -323,7 +322,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return encodedAmount - totalDeducted;
     }
 
-    // Smart Selector: Auto-selects exact match or highest balance source for Deduct 1
     function autoSelectBestDeductSource(targetAmount) {
         const deductSource1 = document.getElementById('deductSource1');
         if (!deductSource1 || customIncomeCategories.length === 0) return;
@@ -612,7 +610,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         dailyTxModal.classList.add('active');
     });
 
-    // Quick Income Modal Event Listener
     if (openIncomeEntryModalBtn && incomeEntryModal) {
         openIncomeEntryModalBtn.addEventListener('click', () => {
             quickIncomeForm.reset();
@@ -726,9 +723,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     setQuickTxFieldsLock(false);
                 }
 
-                // Automatically trigger smart source calculation on bill selection
                 autoSelectBestDeductSource(b.amount);
-
                 quickBillsDropdown.style.display = 'none';
             });
 
@@ -1179,22 +1174,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 customIncomeCategories = JSON.parse(cachedCats);
             }
 
-            customIncomeCategories.forEach(cat => {
-                addDynamicIncomeFieldUI(getCategoryName(cat));
-            });
-            updateIncomeDropdownOptions();
-
             if (cachedBills) bills = JSON.parse(cachedBills);
             if (cachedTx) transactions = JSON.parse(cachedTx);
             if (cachedIncomes) monthlyIncomes = JSON.parse(cachedIncomes);
             if (cachedRanges) paycheckRanges = JSON.parse(cachedRanges);
-
-            if (cachedBills || cachedTx || cachedIncomes) {
-                loadFormForSelectedMonth();
-                updateSummaryCards();
-                renderBills();
-                renderHistory();
-            }
 
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
             const billsTable = prefix + 'bills';
@@ -1275,6 +1258,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     const catData = row.category_data || {};
 
+                    // AUTO-RECOVER CATEGORIES: Extracts category names from Supabase for fresh devices like mobile Chrome
+                    Object.keys(catData).forEach(key => {
+                        const formattedName = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                        const exists = customIncomeCategories.some(c => getCategoryName(c).toLowerCase() === formattedName.toLowerCase());
+                        if (!exists) {
+                            customIncomeCategories.push(formattedName);
+                        }
+                    });
+
                     monthlyIncomes[mIdx][pType] = catData;
                     if (row.start_date || row.end_date) {
                         paycheckRanges[mIdx][pType] = {
@@ -1283,7 +1275,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                         };
                     }
                 });
+
+                localStorage.setItem(`custom_categories_${currentAccount}`, JSON.stringify(customIncomeCategories));
             }
+
+            // Build dynamic fields once categories are synced
+            if (dynamicIncomeFieldsContainer) dynamicIncomeFieldsContainer.innerHTML = '';
+            if (homeIncomeProgressList) homeIncomeProgressList.innerHTML = '';
+
+            customIncomeCategories.forEach(cat => {
+                addDynamicIncomeFieldUI(getCategoryName(cat));
+            });
+            updateIncomeDropdownOptions();
 
             localStorage.setItem(`cache_bills_${currentAccount}`, JSON.stringify(bills));
             localStorage.setItem(`cache_tx_${currentAccount}`, JSON.stringify(transactions));
@@ -1644,7 +1647,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Quick Income Form Submission Handler
     if (quickIncomeForm) {
         quickIncomeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1679,7 +1681,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             monthlyIncomes[targetMonth][targetPaycheckType][fieldKey] = newTotalAmount;
 
-            // Also record this as an income transaction in history so it tracks correctly
             const prefix = currentAccount === 'Krazy Ellie' ? 'ellie_' : 'doom_';
             const uniqueId = 'inc_' + Date.now();
             const newTxDb = {
