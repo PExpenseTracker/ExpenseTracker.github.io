@@ -358,6 +358,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // --- SORT BILLS BY DUE DATE (Earliest / Closest first) ---
+        filteredBills.sort((a, b) => {
+            const dateA = new Date(a.dueDate || '9999-12-31');
+            const dateB = new Date(b.dueDate || '9999-12-31');
+            return dateA - dateB;
+        });
+
         if (upcomingBillsList) {
             upcomingBillsList.innerHTML = '';
             if (filteredBills.length === 0) {
