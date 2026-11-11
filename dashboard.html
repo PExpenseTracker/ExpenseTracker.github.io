@@ -7,17 +7,21 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="dashboard.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Supabase JS Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="dashboard-body">
 
     <div class="dashboard-container">
         <header class="dash-header">
-    <div class="brand-logo">
-        <span class="logo-icon">⚡</span>
-        <span class="logo-text" id="currentAccountTitle">Krazy Doom</span>
-    </div>
-    <button type="button" class="submit-btn" id="switchAccountBtn">Switch</button>
-</header>
+            <div class="brand-logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text" id="currentAccountTitle">Krazy Doom</span>
+            </div>
+            <button type="button" class="submit-btn" id="switchAccountBtn">Switch</button>
+        </header>
 
         <div class="tab-content active" id="homeTab">
             <div class="metrics-grid">
@@ -35,7 +39,8 @@
                 </div>
             </div>
 
-            <div class="dash-content">
+            <!-- 1. Income Progress First -->
+            <div class="dash-content" style="margin-bottom: 14px;">
                 <section class="dash-card">
                     <div class="bills-top-header">
                         <h3>Income Progress</h3>
@@ -43,6 +48,16 @@
                     <div id="homeIncomeAnalyticsList" class="income-progress-list" style="margin-top: 14px;">
                     </div>
                 </section>
+            </div>
+
+            <!-- 2. Expense Breakdown Pie Chart Second -->
+            <div class="dash-card" style="margin-bottom: 14px;">
+                <div class="bills-top-header">
+                    <h3>Expense Breakdown</h3>
+                </div>
+                <div style="text-align: center; padding: 10px 0;">
+                    <canvas id="expensePieChart" style="max-width: 220px; margin: 0 auto;"></canvas>
+                </div>
             </div>
         </div>
 
@@ -63,11 +78,8 @@
                 
                 <div class="bills-sections-wrapper" style="margin-top: 14px;">
                     <h4>Upcoming Bills</h4>
-                    <div id="upcomingBillsList" class="bills-list">
-                    </div>
-
-                    <h4 style="margin-top: 14px;">Paid Bills</h4>
-                    <div id="dailyPaidList" class="bills-list">
+                    <!-- Removed min-height so it expands naturally to fit content before scrolling -->
+                    <div id="upcomingBillsList" class="bills-list" style="max-height: calc(100vh - 340px); overflow-y: auto;">
                     </div>
                 </div>
             </div>
@@ -120,35 +132,6 @@
             </div>
         </div>
 
-        <!-- Pie Chart Modal -->
-        <div class="modal-overlay" id="pieChartModal">
-            <div class="modal-card">
-                <div class="modal-header">
-                    <h3>Expense Breakdown (Pie Chart)</h3>
-                    <button class="modal-close-btn" id="closePieChartModalBtn">✕</button>
-                </div>
-                <div class="modal-body" style="text-align: center; padding: 20px 0;">
-                    <div id="pieChartContainer" style="font-size: 14px; color: #64748b;">
-                        [Pie Chart Visualization Placeholder]
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Income Analysis Modal -->
-        <div class="modal-overlay" id="incomeAnalysisModal">
-            <div class="modal-card">
-                <div class="modal-header">
-                    <h3>Income Analytics Details</h3>
-                    <button class="modal-close-btn" id="closeIncomeAnalysisModalBtn">✕</button>
-                </div>
-                <div class="modal-body">
-                    <div id="modalIncomeAnalysisList" class="breakdown-list">
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Bills / Daily Form Modal -->
         <div class="modal-overlay" id="billFormModal">
             <div class="modal-card">
@@ -195,7 +178,7 @@
                     <!-- Conditional Monthly Duration Input -->
                     <div class="modal-row-line hidden" id="monthlyDurationWrapper">
                         <label>Months</label>
-                        <input type="number" id="billTotalMonthsInput" class="line-input-field" inputmode="numeric" placeholder="" min="1" autocomplete="off">
+                        <input type="number" id="billTotalMonthsInput" class="line-input-field" inputmode="numeric" placeholder="7" min="1" autocomplete="off">
                     </div>
 
                     <div style="display: flex; gap: 8px; margin-top: 14px;">
@@ -365,7 +348,7 @@
             <button class="nav-item" data-target="profileTab" type="button">
                 <div class="icon-badge profile-bg">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 11C14.2 11 16 9.2 16 7C16 4.8 14.2 3 12 3C9.8 3 8 4.8 8 7C8 9.2 9.8 11 12 11Z" fill="currentColor" opacity="0.2"/>
+                        <path style="mix-blend-mode: normal;" d="M12 11C14.2 11 16 9.2 16 7C16 4.8 14.2 3 12 3C9.8 3 8 4.8 8 7C8 9.2 9.8 11 12 11Z" fill="currentColor" opacity="0.2"/>
                         <path d="M12 11C14.2 11 16 9.2 16 7C16 4.8 14.2 3 12 3C9.8 3 8 4.8 8 7C8 9.2 9.8 11 12 11Z" stroke="currentColor" stroke-width="2"/>
                         <path d="M4 21C4 17.1 7.6 14 12 14C16.4 14 20 17.1 20 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                     </svg>
@@ -375,8 +358,6 @@
         </nav>
     </div>
 
-    <!-- Supabase JS Client CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="dashboard.js"></script>
 </body>
 </html>
