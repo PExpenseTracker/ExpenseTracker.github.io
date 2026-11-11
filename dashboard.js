@@ -358,11 +358,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // --- SORT BILLS BY DUE DATE (Earliest / Closest first) ---
+        // --- SORT BILLS CHRONOLOGICALLY BY DUE DATE (Nov 6 at the top) ---
         filteredBills.sort((a, b) => {
-            const dateA = new Date(a.dueDate || '9999-12-31');
-            const dateB = new Date(b.dueDate || '9999-12-31');
-            return dateA - dateB;
+            const dateA = a.dueDate ? a.dueDate.split('T')[0] : '9999-12-31';
+            const dateB = b.dueDate ? b.dueDate.split('T')[0] : '9999-12-31';
+            return dateA.localeCompare(dateB);
         });
 
         if (upcomingBillsList) {
