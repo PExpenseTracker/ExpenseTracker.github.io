@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Disable autocomplete globally on all input elements for extra safety against past browser history suggestions
+    // Disable autocomplete globally on all inputs to suppress browser past history suggestions
     document.querySelectorAll('input').forEach(input => {
         input.setAttribute('autocomplete', 'off');
     });
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentAccount = localStorage.getItem('et_current_account') || 'Krazy Doom';
     
-    // Helper to switch between separate account table prefixes ('doom' or 'ellie')
+    // Helper to switch between separate physical account table prefixes ('doom' or 'ellie')
     function getTablePrefix() {
         return currentAccount === 'Krazy Doom' ? 'doom' : 'ellie';
     }
@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedBreakdowns = [];
     let cachedBills = [];
     let cachedDailyPaid = [];
+    let expensePieChartInstance = null;
 
     const currentAccountTitle = document.getElementById('currentAccountTitle');
     const profileAccountName = document.getElementById('profileAccountName');
@@ -66,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleEditBillsBtn = document.getElementById('toggleEditBillsBtn');
     let isEditMode = false;
     let editingBillIndex = null;
-    let editingDailyIndex = null;
 
     const billFormModal = document.getElementById('billFormModal');
     const closeBillFormModalBtn = document.getElementById('closeBillFormModalBtn');
@@ -103,7 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelIncomeEntryBtn = document.getElementById('cancelIncomeEntryBtn');
 
     const upcomingBillsList = document.getElementById('upcomingBillsList');
-    const dailyPaidList = document.getElementById('dailyPaidList');
 
     function formatCurrency(num) {
         const val = num || 0;
@@ -157,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `et_${currentAccount}_${key}`;
     }
 
-    // --- SUPABASE DATA FETCHERS (Using Separate Account Tables) ---
+    // --- SUPABASE DATA FETCHERS WITH CACHING ---
     async function fetchAllAccountDataFromSupabase() {
         if (!supabaseClient) return;
         const prefix = getTablePrefix();
@@ -204,7 +203,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getBreakdowns() { return cachedBreakdowns; }
     function getBills() { return cachedBills; }
-    function getDailyPaid() { return cachedDailyPaid; }
     function fetchSupabaseTransactions() { return cachedTransactions; }
 
     // --- INTEREST & WHTAX CALCULATION HELPER ---
@@ -341,53 +339,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function renderHomeIncomeAnalytics(filteredTransactions) {
-        if (!homeIncomeAnalyticsList) return;
-        const breakdowns = getBreakdowns();
-        homeIncomeAnalyticsList.innerHTML = '';
-
-        if (breakdowns.length === 0) {
-            homeIncomeAnalyticsList.innerHTML = `<div class="empty-state">No income breakdowns configured.</div>`;
-            return;
-        }
-
-        breakdowns.forEach(b => {
-            let totalIncomeForType = filteredTransactions
-                .filter(t => t.type === 'income' && t.breakdown_type === b.breakdownType)
-                .reduce((sum, t) => sum + Number(t.amount), 0);
-
-            totalIncomeForType = calculateInterestAndTax(totalIncomeForType, b);
-
-            const totalExpenseForType = filteredTransactions
-                .filter(t => t.type === 'expense' && t.breakdown_type === b.breakdownType)
-                .reduce((sum, t) => sum + Number(t.amount), 0);
-
-            const balance = totalIncomeForType - totalExpenseForType;
-            const colorClass = balance > 0 ? 'text-green' : 'text-red';
-
-            const item = document.createElement('div');
-            item.className = 'income-progress-row';
-            item.innerHTML = `
-                <span class="income-progress-title">${b.breakdownType}</span>
-                <div class="income-progress-amounts ${colorClass}">
-                    <span class="amount-val exp-val">${formatCurrency(totalExpenseForType)}</span>
-                    <span class="slash-separator">/</span>
-                    <span class="amount-val inc-val">${formatCurrency(totalIncomeForType)}</span>
-                </div>
-            `;
-            homeIncomeAnalyticsList.appendChild(item);
-        });
-    }
-
     function renderBillsAndDaily() {
         const bills = getBills();
-        const daily = getDailyPaid();
         const activePaycheck = paycheckTypeDropdown ? paycheckTypeDropdown.value : '1st Paycheck';
         const ranges = JSON.parse(localStorage.getItem(getStorageKey('paycheck_ranges'))) || {};
 
         let filteredBills = bills;
 
-        // Strictly filter upcoming bills by active paycheck date range
         if (activePaycheck !== 'Monthly Paycheck' && ranges[activePaycheck]) {
             const range = ranges[activePaycheck];
             const startDate = new Date(range.start + 'T00:00:00');
@@ -438,37 +396,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         }
-
-        if (dailyPaidList) {
-            dailyPaidList.innerHTML = '';
-            if (daily.length === 0) {
-                dailyPaidList.innerHTML = `<div class="empty-state">No paid bills yet.</div>`;
-            } else {
-                daily.forEach((d, index) => {
-                    const item = document.createElement('div');
-                    item.className = 'bill-item bill-green';
-                    if (isEditMode) {
-                        item.style.cursor = 'pointer';
-                        item.title = 'Click to edit this daily record';
-                        item.addEventListener('click', () => { openEditDailyModal(index); });
-                    }
-                    
-                    let subDetails = `${d.deductFrom || 'Daily Cash'} | ${formatDateToHuman(d.date)}`;
-                    if (d.frequency === 'monthly' && d.totalMonths) {
-                        subDetails += ` | ${d.currentMonth || 1} of ${d.totalMonths}`;
-                    }
-
-                    item.innerHTML = `
-                        <div class="bill-info">
-                            <span class="trans-title">${d.type}</span>
-                            <span class="trans-sub">${subDetails}</span>
-                        </div>
-                        <span class="trans-amount income">${formatCurrency(parseFloat(d.amount))}</span>
-                    `;
-                    dailyPaidList.appendChild(item);
-                });
-            }
-        }
     }
 
     if (toggleEditBillsBtn) {
@@ -485,7 +412,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!bill) return;
 
         editingBillIndex = index;
-        editingDailyIndex = null;
         currentBillMode = 'bill';
         if (billFormTitle) billFormTitle.textContent = 'Edit Bill';
         if (dailyDeductWrapper) dailyDeductWrapper.classList.add('hidden');
@@ -521,120 +447,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (billFormModal) billFormModal.classList.add('active');
-    }
-
-    function openEditDailyModal(index) {
-        const daily = getDailyPaid();
-        const record = daily[index];
-        if (!record) return;
-
-        editingDailyIndex = index;
-        editingBillIndex = null;
-        currentBillMode = 'daily';
-        if (billFormTitle) billFormTitle.textContent = 'Edit Daily Expense';
-        if (dailyDeductWrapper) dailyDeductWrapper.classList.remove('hidden');
-
-        const breakdowns = getBreakdowns();
-        if (selectDailyDeductBreakdown) {
-            selectDailyDeductBreakdown.innerHTML = '';
-            if (breakdowns.length === 0) {
-                selectDailyDeductBreakdown.innerHTML = `<option value="Daily Cash">Daily Cash (No Breakdowns)</option>`;
-            } else {
-                breakdowns.forEach(b => {
-                    const opt = document.createElement('option');
-                    opt.value = b.breakdownType;
-                    opt.textContent = b.breakdownType;
-                    if (b.breakdownType === record.deductFrom) opt.selected = true;
-                    selectDailyDeductBreakdown.appendChild(opt);
-                });
-            }
-        }
-
-        if (billTypeInput) billTypeInput.classList.add('hidden');
-        if (billTypeSelect) {
-            billTypeSelect.classList.remove('hidden');
-            billTypeSelect.innerHTML = '';
-            daily.forEach((d, idx) => {
-                const opt = document.createElement('option');
-                opt.value = idx;
-                opt.textContent = d.type;
-                if (idx === index) opt.selected = true;
-                billTypeSelect.appendChild(opt);
-            });
-        }
-
-        if (billAmountInput) billAmountInput.value = formatInputAmount(record.amount);
-        if (billDueDateInput) billDueDateInput.value = record.date;
-
-        document.querySelectorAll('input[name="billFrequency"]').forEach(r => {
-            r.checked = (r.value === (record.frequency || 'once'));
-        });
-
-        if (monthlyDurationWrapper) {
-            if (record.frequency === 'monthly') {
-                monthlyDurationWrapper.classList.remove('hidden');
-                if (billTotalMonthsInput) billTotalMonthsInput.value = record.totalMonths || '';
-            } else {
-                monthlyDurationWrapper.classList.add('hidden');
-                if (billTotalMonthsInput) billTotalMonthsInput.value = '';
-            }
-        }
-
-        if (billFormModal) billFormModal.classList.add('active');
-    }
-
-    if (billTypeSelect) {
-        billTypeSelect.addEventListener('change', () => {
-            const selectedIdx = parseInt(billTypeSelect.value);
-            if (currentBillMode === 'bill') {
-                const bills = getBills();
-                if (!isNaN(selectedIdx) && bills[selectedIdx]) {
-                    editingBillIndex = selectedIdx;
-                    const b = bills[selectedIdx];
-                    if (billAmountInput) billAmountInput.value = formatInputAmount(b.amount);
-                    if (billDueDateInput) billDueDateInput.value = b.dueDate;
-
-                    document.querySelectorAll('input[name="billFrequency"]').forEach(r => {
-                        r.checked = (r.value === b.frequency);
-                    });
-
-                    if (monthlyDurationWrapper) {
-                        if (b.frequency === 'monthly') {
-                            monthlyDurationWrapper.classList.remove('hidden');
-                            if (billTotalMonthsInput) billTotalMonthsInput.value = b.totalMonths || '';
-                        } else {
-                            monthlyDurationWrapper.classList.add('hidden');
-                            if (billTotalMonthsInput) billTotalMonthsInput.value = '';
-                        }
-                    }
-                }
-            } else {
-                const daily = getDailyPaid();
-                if (!isNaN(selectedIdx) && daily[selectedIdx]) {
-                    editingDailyIndex = selectedIdx;
-                    const r = daily[selectedIdx];
-                    if (billAmountInput) billAmountInput.value = formatInputAmount(r.amount);
-                    if (billDueDateInput) billDueDateInput.value = r.date;
-                    if (selectDailyDeductBreakdown && r.deductFrom) {
-                        selectDailyDeductBreakdown.value = r.deductFrom;
-                    }
-
-                    document.querySelectorAll('input[name="billFrequency"]').forEach(rRadio => {
-                        rRadio.checked = (rRadio.value === (r.frequency || 'once'));
-                    });
-
-                    if (monthlyDurationWrapper) {
-                        if (r.frequency === 'monthly') {
-                            monthlyDurationWrapper.classList.remove('hidden');
-                            if (billTotalMonthsInput) billTotalMonthsInput.value = r.totalMonths || '';
-                        } else {
-                            monthlyDurationWrapper.classList.add('hidden');
-                            if (billTotalMonthsInput) billTotalMonthsInput.value = '';
-                        }
-                    }
-                }
-            }
-        });
     }
 
     navItems.forEach(item => {
@@ -781,7 +593,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btnChoiceBills.addEventListener('click', () => {
             currentBillMode = 'bill';
             editingBillIndex = null;
-            editingDailyIndex = null;
             if (billFormTitle) billFormTitle.textContent = isEditMode ? 'Edit Bill' : 'Add Bill';
             if (dailyDeductWrapper) dailyDeductWrapper.classList.add('hidden');
 
@@ -824,8 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnChoiceDaily.addEventListener('click', () => {
             currentBillMode = 'daily';
             editingBillIndex = null;
-            editingDailyIndex = null;
-            if (billFormTitle) billFormTitle.textContent = isEditMode ? 'Edit Daily Expense' : 'Add Daily Expense';
+            if (billFormTitle) billFormTitle.textContent = 'Add Daily Expense';
             if (dailyDeductWrapper) dailyDeductWrapper.classList.remove('hidden');
 
             const breakdowns = getBreakdowns();
@@ -840,25 +650,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         opt.textContent = b.breakdownType;
                         selectDailyDeductBreakdown.appendChild(opt);
                     });
-                }
-            }
-
-            if (isEditMode) {
-                const daily = getDailyPaid();
-                if (daily.length > 0) {
-                    if (billTypeInput) billTypeInput.classList.add('hidden');
-                    if (billTypeSelect) {
-                        billTypeSelect.classList.remove('hidden');
-                        billTypeSelect.innerHTML = '';
-                        daily.forEach((d, idx) => {
-                            const opt = document.createElement('option');
-                            opt.value = idx;
-                            opt.textContent = d.type;
-                            billTypeSelect.appendChild(opt);
-                        });
-                    }
-                    openEditDailyModal(0);
-                    return;
                 }
             }
 
@@ -924,17 +715,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             } else {
-                const daily = getDailyPaid();
-                let type = '';
+                const type = billTypeInput ? billTypeInput.value.trim() : '';
                 const deductFrom = selectDailyDeductBreakdown ? selectDailyDeductBreakdown.value : 'Daily Cash';
-
-                if (billTypeSelect && !billTypeSelect.classList.contains('hidden')) {
-                    const selectedIdx = parseInt(billTypeSelect.value);
-                    if (!isNaN(selectedIdx)) editingDailyIndex = selectedIdx;
-                    type = daily[editingDailyIndex] ? daily[editingDailyIndex].type : '';
-                } else {
-                    type = billTypeInput ? billTypeInput.value.trim() : '';
-                }
 
                 if (!type || isNaN(amount) || amount <= 0) {
                     alert('Please enter a valid type and amount.');
@@ -942,34 +724,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 if (supabaseClient) {
-                    if (editingDailyIndex !== null && daily[editingDailyIndex]?.id) {
-                        const { error } = await supabaseClient.from(`${prefix}_daily_paid`).update({
-                            type, amount, deduct_from: deductFrom, date: dueDate, frequency, total_months: totalMonths
-                        }).eq('id', daily[editingDailyIndex].id);
-                        if (error) { alert('Error updating daily expense: ' + error.message); return; }
-                    } else {
-                        const { error: dailyError } = await supabaseClient.from(`${prefix}_daily_paid`).insert([{
-                            type, amount, deduct_from: deductFrom, date: dueDate, frequency, total_months: totalMonths, current_month: 1
-                        }]);
-                        if (dailyError) { alert('Error saving daily expense: ' + dailyError.message); return; }
+                    const { error: dailyError } = await supabaseClient.from(`${prefix}_daily_paid`).insert([{
+                        type, amount, deduct_from: deductFrom, date: dueDate, frequency, total_months: totalMonths, current_month: 1
+                    }]);
+                    if (dailyError) { alert('Error saving daily expense: ' + dailyError.message); return; }
 
-                        const { error: transError } = await supabaseClient.from(`${prefix}_transactions`).insert([{
-                            description: type,
-                            amount: amount,
-                            type: 'expense',
-                            category: 'Utilities',
-                            full_date: dueDate,
-                            breakdown_type: deductFrom,
-                            date_label: new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                            paycheck_type: activePaycheck
-                        }]);
-                        if (transError) { alert('Error saving transaction history: ' + transError.message); return; }
-                    }
+                    const { error: transError } = await supabaseClient.from(`${prefix}_transactions`).insert([{
+                        description: type,
+                        amount: amount,
+                        type: 'expense',
+                        category: 'Utilities',
+                        full_date: dueDate,
+                        breakdown_type: deductFrom,
+                        date_label: new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                        paycheck_type: activePaycheck
+                    }]);
+                    if (transError) { alert('Error saving transaction history: ' + transError.message); return; }
                 }
             }
 
             editingBillIndex = null;
-            editingDailyIndex = null;
             if (billFormModal) billFormModal.classList.remove('active');
             await fetchAllAccountDataFromSupabase();
             renderBillsAndDaily();
@@ -1058,19 +832,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalMonths = paidBill.totalMonths || 1;
 
             if (supabaseClient) {
-                const { error: dailyError } = await supabaseClient.from(`${prefix}_daily_paid`).insert([{
-                    type: paidBill.type,
-                    amount: paidBill.amount,
-                    deduct_from: deductFrom,
-                    date: paidBill.dueDate,
-                    frequency: paidBill.frequency,
-                    total_months: totalMonths,
-                    current_month: currentMonth
-                }]);
-                if (dailyError) { alert('Error saving paid bill: ' + dailyError.message); return; }
-
+                // Route directly to transaction history with "Bills is Paid: [Type]" label
                 const { error: transError } = await supabaseClient.from(`${prefix}_transactions`).insert([{
-                    description: paidBill.type,
+                    description: `Bills is Paid: ${paidBill.type}`,
                     amount: parseFloat(paidBill.amount),
                     type: 'expense',
                     category: 'Utilities',
@@ -1079,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     date_label: new Date(paidBill.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
                     paycheck_type: activePaycheck
                 }]);
-                if (transError) { alert('Error saving transaction history: ' + transError.message); return; }
+                if (transError) { alert('Error saving paid bill to history: ' + transError.message); return; }
 
                 if (paidBill.frequency === 'monthly' && currentMonth < totalMonths) {
                     let nextDate = new Date(paidBill.dueDate);
@@ -1254,6 +1018,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderBreakdowns();
         renderHomeIncomeAnalytics(filteredTransactions);
+        renderExpensePieChart(filteredTransactions);
 
         if (transactionList) {
             transactionList.innerHTML = '';
@@ -1283,6 +1048,94 @@ document.addEventListener('DOMContentLoaded', () => {
                 transactionList.appendChild(li);
             });
         }
+    }
+
+    function renderHomeIncomeAnalytics(filteredTransactions) {
+        if (!homeIncomeAnalyticsList) return;
+        const breakdowns = getBreakdowns();
+        homeIncomeAnalyticsList.innerHTML = '';
+
+        if (breakdowns.length === 0) {
+            homeIncomeAnalyticsList.innerHTML = `<div class="empty-state">No income breakdowns configured.</div>`;
+            return;
+        }
+
+        breakdowns.forEach(b => {
+            let totalIncomeForType = filteredTransactions
+                .filter(t => t.type === 'income' && t.breakdown_type === b.breakdownType)
+                .reduce((sum, t) => sum + Number(t.amount), 0);
+
+            totalIncomeForType = calculateInterestAndTax(totalIncomeForType, b);
+
+            const totalExpenseForType = filteredTransactions
+                .filter(t => t.type === 'expense' && t.breakdown_type === b.breakdownType)
+                .reduce((sum, t) => sum + Number(t.amount), 0);
+
+            const balance = totalIncomeForType - totalExpenseForType;
+            const colorClass = balance > 0 ? 'text-green' : 'text-red';
+
+            const item = document.createElement('div');
+            item.className = 'income-progress-row';
+            item.innerHTML = `
+                <span class="income-progress-title">${b.breakdownType}</span>
+                <div class="income-progress-amounts ${colorClass}">
+                    <span class="amount-val exp-val">${formatCurrency(totalExpenseForType)}</span>
+                    <span class="slash-separator">/</span>
+                    <span class="amount-val inc-val">${formatCurrency(totalIncomeForType)}</span>
+                </div>
+            `;
+            homeIncomeAnalyticsList.appendChild(item);
+        });
+    }
+
+    function renderExpensePieChart(filteredTransactions) {
+        const canvas = document.getElementById('expensePieChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        const expenseMap = {};
+        filteredTransactions
+            .filter(t => t.type === 'expense')
+            .forEach(t => {
+                const cat = t.category || 'Utilities';
+                expenseMap[cat] = (expenseMap[cat] || 0) + Number(t.amount);
+            });
+
+        const labels = Object.keys(expenseMap);
+        const data = Object.values(expenseMap);
+
+        if (expensePieChartInstance) {
+            expensePieChartInstance.destroy();
+        }
+
+        if (labels.length === 0) {
+            expensePieChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['No Expenses'],
+                    datasets: [{ data: [1], backgroundColor: ['#334155'] }]
+                },
+                options: { plugins: { legend: { display: false } } }
+            });
+            return;
+        }
+
+        expensePieChartInstance = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { size: 10 } } }
+                }
+            }
+        });
     }
 
     loadAccountData();
