@@ -521,7 +521,7 @@ select option {
     font-size: 8.5px;
     font-weight: 700;
     color: var(--text-primary);
-    width: 75px; /* Updated width to 75px */
+    width: 100px;
     text-align: center;
     box-sizing: border-box;
 }
