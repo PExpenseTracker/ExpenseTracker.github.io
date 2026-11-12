@@ -28,6 +28,22 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${year}-${month}-${day}`;
     }
 
+    // Normalizes various device date inputs (like DD/MM/YYYY or standard inputs) into strict YYYY-MM-DD ISO format
+    function normalizeDateToISO(dateStr) {
+        if (!dateStr) return getTodayDateString();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            return dateStr;
+        }
+        const parts = dateStr.split(/[\/\.-]/);
+        if (parts.length === 3 && parts[2].length === 4) {
+            const year = parts[2];
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        return dateStr;
+    }
+
     let cachedTransactions = [];
     let cachedBreakdowns = [];
     let cachedBills = [];
@@ -326,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: b.id,
             type: b.type,
             amount: b.amount,
-            dueDate: b.due_date,
+            dueDate: normalizeDateToISO(b.due_date),
             frequency: b.frequency,
             totalMonths: b.total_months,
             currentMonth: b.current_month
@@ -337,13 +353,16 @@ document.addEventListener('DOMContentLoaded', () => {
             type: d.type,
             amount: d.amount,
             deductFrom: d.deduct_from,
-            date: d.date,
+            date: normalizeDateToISO(d.date),
             frequency: d.frequency,
             totalMonths: d.total_months,
             currentMonth: d.currentMonth
         }));
 
-        cachedTransactions = transRes.data || [];
+        cachedTransactions = (transRes.data || []).map(t => ({
+            ...t,
+            full_date: normalizeDateToISO(t.full_date)
+        }));
     }
 
     function getBreakdowns() { return cachedBreakdowns; }
@@ -392,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 t.breakdown_type.trim().toLowerCase() === b.breakdownType.trim().toLowerCase()
             );
 
-            const rolloverDate = cycleStartDate ? cycleStartDate.value : getTodayDateString();
+            const rolloverDate = cycleStartDate ? normalizeDateToISO(cycleStartDate.value) : getTodayDateString();
 
             if (remainingBalance > 0) {
                 if (existingRolloverTx) {
@@ -453,8 +472,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (paycheckName === 'Monthly Paycheck') {
             const range1 = ranges['1st Paycheck'] || { start: '2026-11-06', end: '2026-11-20' };
             const range2 = ranges['2nd Paycheck'] || { start: '2026-11-21', end: '2026-12-05' };
-            if (cycleStartDate) { cycleStartDate.value = range1.start; cycleStartDate.disabled = true; }
-            if (cycleEndDate) { cycleEndDate.value = range2.end; cycleEndDate.disabled = true; }
+            if (cycleStartDate) { cycleStartDate.value = normalizeDateToISO(range1.start); cycleStartDate.disabled = true; }
+            if (cycleEndDate) { cycleEndDate.value = normalizeDateToISO(range2.end); cycleEndDate.disabled = true; }
             return;
         }
 
@@ -462,8 +481,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cycleEndDate) cycleEndDate.disabled = false;
 
         if (ranges[paycheckName]) {
-            if (cycleStartDate) cycleStartDate.value = ranges[paycheckName].start;
-            if (cycleEndDate) cycleEndDate.value = ranges[paycheckName].end;
+            if (cycleStartDate) cycleStartDate.value = normalizeDateToISO(ranges[paycheckName].start);
+            if (cycleEndDate) cycleEndDate.value = normalizeDateToISO(ranges[paycheckName].end);
         } else {
             if (paycheckName === '1st Paycheck') {
                 if (cycleStartDate) cycleStartDate.value = '2026-11-06';
@@ -483,8 +502,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const ranges = JSON.parse(localStorage.getItem(getStorageKey('paycheck_ranges'))) || {};
         ranges[activePaycheck] = {
-            start: cycleStartDate.value,
-            end: cycleEndDate.value
+            start: normalizeDateToISO(cycleStartDate.value),
+            end: normalizeDateToISO(cycleEndDate.value)
         };
         localStorage.setItem(getStorageKey('paycheck_ranges'), JSON.stringify(ranges));
         updateUI();
@@ -509,8 +528,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatDateToFullHuman(dateString) {
         if (!dateString) return '';
+        const isoDate = normalizeDateToISO(dateString);
         const options = { year: 'numeric', month: 'short', day: 'numeric' };
-        return new Date(dateString + 'T00:00:00').toLocaleDateString('en-US', options);
+        return new Date(isoDate + 'T00:00:00').toLocaleDateString('en-US', options);
     }
 
     function getFilteredTransactionsForView() {
@@ -567,19 +587,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (activePaycheck !== 'Monthly Paycheck' && ranges[activePaycheck]) {
             const range = ranges[activePaycheck];
-            const startDate = new Date(range.start + 'T00:00:00');
-            const endDate = new Date(range.end + 'T23:59:59');
+            const startDate = new Date(normalizeDateToISO(range.start) + 'T00:00:00');
+            const endDate = new Date(normalizeDateToISO(range.end) + 'T23:59:59');
 
             filteredBills = bills.filter(b => {
                 if (!b.dueDate) return true;
-                const dueDateObj = new Date(b.dueDate + 'T00:00:00');
+                const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
                 return dueDateObj >= startDate && dueDateObj <= endDate;
             });
         }
 
         filteredBills.sort((a, b) => {
-            const dateA = a.dueDate ? a.dueDate.split('T')[0] : '9999-12-31';
-            const dateB = b.dueDate ? b.dueDate.split('T')[0] : '9999-12-31';
+            const dateA = a.dueDate ? normalizeDateToISO(a.dueDate) : '9999-12-31';
+            const dateB = b.dueDate ? normalizeDateToISO(b.dueDate) : '9999-12-31';
             return dateA.localeCompare(dateB);
         });
 
@@ -593,8 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 filteredBills.forEach((b) => {
                     const index = bills.findIndex(item => item.id === b.id);
-                    const dueDateObj = new Date(b.dueDate);
-                    dueDateObj.setHours(0, 0, 0, 0);
+                    const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
 
                     const diffTime = dueDateObj - today;
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -655,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (billAmountInput) billAmountInput.value = formatInputAmount(bill.amount);
-        if (billDueDateInput) billDueDateInput.value = bill.dueDate;
+        if (billDueDateInput) billDueDateInput.value = normalizeDateToISO(bill.dueDate);
 
         document.querySelectorAll('input[name="billFrequency"]').forEach(r => {
             r.checked = (r.value === bill.frequency);
@@ -922,7 +941,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 const amount = parseInputAmount(billAmountInput ? billAmountInput.value : 0);
-                const dueDate = billDueDateInput ? billDueDateInput.value : getTodayDateString();
+                const dueDate = normalizeDateToISO(billDueDateInput ? billDueDateInput.value : getTodayDateString());
                 const checkedFreq = document.querySelector('input[name="billFrequency"]:checked');
                 const frequency = checkedFreq ? checkedFreq.value : 'once';
                 const totalMonths = frequency === 'monthly' ? parseInt(billTotalMonthsInput ? billTotalMonthsInput.value : 1) || 1 : null;
@@ -1030,19 +1049,19 @@ document.addEventListener('DOMContentLoaded', () => {
             let filteredBills = bills;
             if (activePaycheck !== 'Monthly Paycheck' && ranges[activePaycheck]) {
                 const range = ranges[activePaycheck];
-                const startDate = new Date(range.start + 'T00:00:00');
-                const endDate = new Date(range.end + 'T23:59:59');
+                const startDate = new Date(normalizeDateToISO(range.start) + 'T00:00:00');
+                const endDate = new Date(normalizeDateToISO(range.end) + 'T23:59:59');
 
                 filteredBills = bills.filter(b => {
                     if (!b.dueDate) return true;
-                    const dueDateObj = new Date(b.dueDate + 'T00:00:00');
+                    const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
                     return dueDateObj >= startDate && dueDateObj <= endDate;
                 });
             }
 
             filteredBills.sort((a, b) => {
-                const dateA = a.dueDate ? a.dueDate.split('T')[0] : '9999-12-31';
-                const dateB = b.dueDate ? b.dueDate.split('T')[0] : '9999-12-31';
+                const dateA = a.dueDate ? normalizeDateToISO(a.dueDate) : '9999-12-31';
+                const dateB = b.dueDate ? normalizeDateToISO(b.dueDate) : '9999-12-31';
                 return dateA.localeCompare(dateB);
             });
 
@@ -1108,7 +1127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (idx !== '' && bills[idx]) {
             const b = bills[idx];
             if (paidAmountDisplay) paidAmountDisplay.value = formatInputAmount(b.amount);
-            if (paidDueDateDisplay) paidDueDateDisplay.value = b.dueDate;
+            if (paidDueDateDisplay) paidDueDateDisplay.value = normalizeDateToISO(b.dueDate);
         } else {
             if (paidAmountDisplay) paidAmountDisplay.value = '';
             if (paidDueDateDisplay) paidDueDateDisplay.value = '';
@@ -1205,14 +1224,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (transError) { alert('Error saving paid bill to history: ' + transError.message); return; }
 
                     if (paidBill.frequency === 'monthly' && currentMonth < totalMonths) {
-                        let nextDate = new Date(paidBill.dueDate);
+                        let nextDate = new Date(normalizeDateToISO(paidBill.dueDate) + 'T00:00:00');
                         nextDate.setMonth(nextDate.getMonth() + 1);
                         await supabaseClient.from(`${prefix}_bills`).update({
                             current_month: currentMonth + 1,
                             due_date: nextDate.toISOString().split('T')[0]
                         }).eq('id', paidBill.id);
                     } else if (paidBill.frequency === 'permanent') {
-                        let nextDate = new Date(paidBill.dueDate);
+                        let nextDate = new Date(normalizeDateToISO(paidBill.dueDate) + 'T00:00:00');
                         nextDate.setMonth(nextDate.getMonth() + 1);
                         await supabaseClient.from(`${prefix}_bills`).update({
                             due_date: nextDate.toISOString().split('T')[0]
@@ -1268,7 +1287,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isTransfer = enableIncomeTransfer ? enableIncomeTransfer.checked : false;
                 const selectedTypeValue = selectIncomeBreakdownType ? selectIncomeBreakdownType.value : '';
                 const amount = parseInputAmount(incomeEntryAmount ? incomeEntryAmount.value : 0);
-                const entryDate = incomeEntryDate ? incomeEntryDate.value : getTodayDateString();
+                const entryDate = normalizeDateToISO(incomeEntryDate ? incomeEntryDate.value : getTodayDateString());
                 const activePaycheck = paycheckTypeDropdown ? paycheckTypeDropdown.value : '1st Paycheck';
                 const prefix = getTablePrefix();
 
@@ -1528,9 +1547,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvas = document.getElementById('expensePieChart');
         if (!canvas) return;
         
-        // Ensure explicit canvas dimensions to prevent collapse on zero-expense re-renders
+        // Expanded to 250px height
         canvas.style.width = '100%';
-        canvas.style.height = '180px';
+        canvas.style.height = '250px';
         
         const ctx = canvas.getContext('2d');
 
@@ -1558,7 +1577,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = canvas.parentElement;
         if (container) {
             container.style.position = 'relative';
-            container.style.height = '180px';
+            container.style.height = '250px';
         }
 
         if (labels.length === 0) {
