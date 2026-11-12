@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${year}-${month}-${day}`;
     }
 
-    // Normalizes various device date inputs (like DD/MM/YYYY or standard inputs) into strict YYYY-MM-DD ISO format
     function normalizeDateToISO(dateStr) {
         if (!dateStr) return getTodayDateString();
         if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -370,10 +369,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function fetchSupabaseTransactions() { return cachedTransactions; }
 
     function calculateInterestAndTax(currentBalance, breakdownConfig) {
-        if (!breakdownConfig || !breakdownConfig.hasInterest) {
+        if (!breakdownConfig || !breakdownConfig.hasInterest || currentBalance <= 0) {
             return currentBalance;
         }
         const rate = parseFloat(breakdownConfig.interestRate) || 0;
+        if (rate <= 0) {
+            return currentBalance;
+        }
+
         const days = parseFloat(breakdownConfig.paDays) || 365;
         const whtax = parseFloat(breakdownConfig.whtaxPercent) || 0;
 
@@ -385,6 +388,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return currentBalance + dailyInterest;
+    }
+
+    // Helper: Calculates breakdown income. Applies interest ONLY to regular income, keeping Rollover balances strictly fixed.
+    function getBreakdownAdjustedIncome(transactionsList, breakdownConfig) {
+        const regularIncome = transactionsList
+            .filter(t => t.type === 'income' && t.category !== 'Rollover')
+            .reduce((sum, t) => sum + Number(t.amount), 0);
+
+        const rolloverIncome = transactionsList
+            .filter(t => t.type === 'income' && t.category === 'Rollover')
+            .reduce((sum, t) => sum + Number(t.amount), 0);
+
+        return calculateInterestAndTax(regularIncome, breakdownConfig) + rolloverIncome;
     }
 
     async function processPaycheckRollover(targetPaycheck) {
@@ -400,14 +416,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 t.paycheck_type === '1st Paycheck'
             );
 
-            const inc1st = relTrans1st.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-            const finalInc1st = calculateInterestAndTax(inc1st, b);
+            // Exactly capture the final displayed 1st Paycheck total
+            const adjustedIncome1st = getBreakdownAdjustedIncome(relTrans1st, b);
             const exp1st = relTrans1st.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-            const remainingBalance = Number((finalInc1st - exp1st).toFixed(2));
+            const remainingBalance = Number((adjustedIncome1st - exp1st).toFixed(2));
 
             const existingRolloverTx = transactions.find(t =>
                 t.paycheck_type === '2nd Paycheck' &&
                 t.category === 'Rollover' &&
+                t.breakdown_type &&
                 t.breakdown_type.trim().toLowerCase() === b.breakdownType.trim().toLowerCase()
             );
 
@@ -557,14 +574,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         breakdowns.forEach((b) => {
             let relevantTransactions = filteredTransactions.filter(t => 
-                t.type === 'income' && 
                 t.breakdown_type && 
                 b.breakdownType && 
                 t.breakdown_type.trim().toLowerCase() === b.breakdownType.trim().toLowerCase()
             );
 
-            let totalForType = relevantTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
-            totalForType = calculateInterestAndTax(totalForType, b);
+            let totalForType = getBreakdownAdjustedIncome(relevantTransactions, b);
 
             const item = document.createElement('div');
             item.className = 'breakdown-item-card';
@@ -580,62 +595,112 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderBillsAndDaily() {
         const bills = getBills();
+        const filteredTransactions = getFilteredTransactionsForView();
         const activePaycheck = paycheckTypeDropdown ? paycheckTypeDropdown.value : '1st Paycheck';
         const ranges = JSON.parse(localStorage.getItem(getStorageKey('paycheck_ranges'))) || {};
 
-        let filteredBills = bills;
-
+        let startDateObj = null;
+        let endDateObj = null;
         if (activePaycheck !== 'Monthly Paycheck' && ranges[activePaycheck]) {
             const range = ranges[activePaycheck];
-            const startDate = new Date(normalizeDateToISO(range.start) + 'T00:00:00');
-            const endDate = new Date(normalizeDateToISO(range.end) + 'T23:59:59');
+            startDateObj = new Date(normalizeDateToISO(range.start) + 'T00:00:00');
+            endDateObj = new Date(normalizeDateToISO(range.end) + 'T23:59:59');
+        }
 
+        let paidBillsList = filteredTransactions.filter(t => t.type === 'expense').map(t => ({
+            id: t.id,
+            type: t.description || t.category,
+            amount: t.amount,
+            dueDate: t.full_date,
+            isPaid: true
+        }));
+
+        paidBillsList.sort((a, b) => {
+            const dateA = a.dueDate ? normalizeDateToISO(a.dueDate) : '0000-00-00';
+            const dateB = b.dueDate ? normalizeDateToISO(b.dueDate) : '0000-00-00';
+            return dateB.localeCompare(dateA);
+        });
+
+        let filteredBills = bills;
+        if (startDateObj && endDateObj) {
             filteredBills = bills.filter(b => {
                 if (!b.dueDate) return true;
                 const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
-                return dueDateObj >= startDate && dueDateObj <= endDate;
+                return dueDateObj >= startDateObj && dueDateObj <= endDateObj;
             });
         }
 
-        filteredBills.sort((a, b) => {
-            const dateA = a.dueDate ? normalizeDateToISO(a.dueDate) : '9999-12-31';
-            const dateB = b.dueDate ? normalizeDateToISO(b.dueDate) : '9999-12-31';
-            return dateA.localeCompare(dateB);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let redBills = [];
+        let otherBills = [];
+
+        filteredBills.forEach(b => {
+            const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
+            dueDateObj.setHours(0, 0, 0, 0);
+            const diffDays = Math.ceil((dueDateObj - today) / (1000 * 60 * 60 * 24));
+
+            let colorClass = diffDays <= 7 ? 'bill-red' : 'bill-blue';
+            const billObj = { ...b, colorClass };
+
+            if (diffDays <= 7) {
+                redBills.push(billObj);
+            } else {
+                otherBills.push(billObj);
+            }
         });
+
+        const sortByDate = (x, y) => {
+            const dateA = x.dueDate ? normalizeDateToISO(x.dueDate) : '9999-12-31';
+            const dateB = y.dueDate ? normalizeDateToISO(y.dueDate) : '9999-12-31';
+            return dateA.localeCompare(dateB);
+        };
+
+        redBills.sort(sortByDate);
+        otherBills.sort(sortByDate);
 
         if (upcomingBillsList) {
             upcomingBillsList.innerHTML = '';
-            if (filteredBills.length === 0) {
-                upcomingBillsList.innerHTML = `<div class="empty-state">No upcoming bills for ${activePaycheck}.</div>`;
+
+            const allDisplayItems = [
+                ...paidBillsList.map(b => ({ ...b, section: 'paid' })),
+                ...redBills.map(b => ({ ...b, section: 'upcoming_red' })),
+                ...otherBills.map(b => ({ ...b, section: 'upcoming_other' }))
+            ];
+
+            if (allDisplayItems.length === 0) {
+                upcomingBillsList.innerHTML = `<div class="empty-state">No bills or payments for ${activePaycheck}.</div>`;
             } else {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-
-                filteredBills.forEach((b) => {
-                    const index = bills.findIndex(item => item.id === b.id);
-                    const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
-
-                    const diffTime = dueDateObj - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                    let colorClass = 'bill-blue';
-                    if (diffDays <= 7) colorClass = 'bill-red';
-
+                allDisplayItems.forEach((b) => {
                     const item = document.createElement('div');
-                    item.className = `bill-item ${colorClass}`;
-                    if (isEditMode) {
-                        item.style.cursor = 'pointer';
-                        item.title = 'Click to edit this bill';
-                        item.addEventListener('click', () => { openEditBillModal(index); });
+                    
+                    if (b.section === 'paid') {
+                        item.className = 'bill-item bill-green';
+                        item.innerHTML = `
+                            <div class="bill-info">
+                                <span class="trans-title">${b.type} (Paid)</span>
+                                <span class="trans-sub">Paid on: ${formatDateToFullHuman(b.dueDate)}</span>
+                            </div>
+                            <span class="trans-amount bill-green-amount">${formatCurrency(parseFloat(b.amount))}</span>
+                        `;
+                    } else {
+                        const originalIndex = bills.findIndex(item => item.id === b.id);
+                        item.className = `bill-item ${b.colorClass}`;
+                        if (isEditMode) {
+                            item.style.cursor = 'pointer';
+                            item.title = 'Click to edit this bill';
+                            item.addEventListener('click', () => { openEditBillModal(originalIndex); });
+                        }
+                        const amountColorClass = b.colorClass === 'bill-red' ? 'bill-red-amount' : 'bill-blue-amount';
+                        item.innerHTML = `
+                            <div class="bill-info">
+                                <span class="trans-title">${b.type}</span>
+                                <span class="trans-sub">Due: ${formatDateToFullHuman(b.dueDate)}</span>
+                            </div>
+                            <span class="trans-amount ${amountColorClass}">${formatCurrency(parseFloat(b.amount))}</span>
+                        `;
                     }
-
-                    item.innerHTML = `
-                        <div class="bill-info">
-                            <span class="trans-title">${b.type}</span>
-                            <span class="trans-sub">Due: ${formatDateToFullHuman(b.dueDate)}</span>
-                        </div>
-                        <span class="trans-amount ${colorClass}-amount">${formatCurrency(parseFloat(b.amount))}</span>
-                    `;
                     upcomingBillsList.appendChild(item);
                 });
             }
@@ -994,8 +1059,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (activePaycheck !== 'Monthly Paycheck') {
                             relTrans = relTrans.filter(t => t.paycheck_type === activePaycheck);
                         }
-                        const incTotal = relTrans.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-                        const finalInc = calculateInterestAndTax(incTotal, targetBreakdown);
+                        const finalInc = getBreakdownAdjustedIncome(relTrans, targetBreakdown);
                         const expTotal = relTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
                         const currentBalance = Number((finalInc - expTotal).toFixed(2));
                         const parsedAmount = Number(amount.toFixed(2));
@@ -1195,8 +1259,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (activePaycheck !== 'Monthly Paycheck') {
                         relTrans = relTrans.filter(t => t.paycheck_type === activePaycheck);
                     }
-                    const incTotal = relTrans.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-                    const finalInc = calculateInterestAndTax(incTotal, targetBreakdown);
+                    const finalInc = getBreakdownAdjustedIncome(relTrans, targetBreakdown);
                     const expTotal = relTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
                     const currentBalance = Number((finalInc - expTotal).toFixed(2));
                     const parsedBillAmount = Number(billAmount.toFixed(2));
@@ -1312,6 +1375,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const bType = b.breakdownType.trim().toLowerCase();
                             return bType.includes(sourceCandidate);
                         });
+                        
                         const sourceBreakdown = matchedSourceBreakdown ? matchedSourceBreakdown.breakdownType : parts[0].trim();
 
                         if (!sourceBreakdown || !transferTarget) {
@@ -1428,13 +1492,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (breakdowns.length > 0) {
             breakdowns.forEach(b => {
                 let relevantTransactions = filteredTransactions.filter(t => 
-                    t.type === 'income' && 
                     t.breakdown_type && 
                     b.breakdownType && 
                     t.breakdown_type.trim().toLowerCase() === b.breakdownType.trim().toLowerCase()
                 );
-                let totalForType = relevantTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
-                income += calculateInterestAndTax(totalForType, b);
+                income += getBreakdownAdjustedIncome(relevantTransactions, b);
             });
         } else {
             income = filteredTransactions
@@ -1506,24 +1568,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         breakdowns.forEach(b => {
-            let totalIncomeForType = filteredTransactions
-                .filter(t => 
-                    t.type === 'income' && 
-                    t.breakdown_type && 
-                    b.breakdownType && 
-                    b.breakdownType.trim().toLowerCase() === t.breakdown_type.trim().toLowerCase()
-                )
-                .reduce((sum, t) => sum + Number(t.amount), 0);
+            let relevantTransactions = filteredTransactions.filter(t => 
+                t.breakdown_type && 
+                b.breakdownType && 
+                b.breakdownType.trim().toLowerCase() === t.breakdown_type.trim().toLowerCase()
+            );
 
-            totalIncomeForType = calculateInterestAndTax(totalIncomeForType, b);
+            const totalIncomeForType = getBreakdownAdjustedIncome(relevantTransactions, b);
 
-            const totalExpenseForType = filteredTransactions
-                .filter(t => 
-                    t.type === 'expense' && 
-                    t.breakdown_type && 
-                    b.breakdownType && 
-                    b.breakdownType.trim().toLowerCase() === t.breakdown_type.trim().toLowerCase()
-                )
+            const totalExpenseForType = relevantTransactions
+                .filter(t => t.type === 'expense')
                 .reduce((sum, t) => sum + Number(t.amount), 0);
 
             const balance = totalIncomeForType - totalExpenseForType;
@@ -1547,7 +1601,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvas = document.getElementById('expensePieChart');
         if (!canvas) return;
         
-        // Expanded to 250px height
         canvas.style.width = '100%';
         canvas.style.height = '250px';
         
