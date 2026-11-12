@@ -29,9 +29,17 @@ body.dashboard-body {
 
 .dashboard-container {
     width: 100%;
-    max-width: 440px;
-    margin: 0 auto;
-    padding: 12px 10px 75px 10px;
+    max-width: 100%;
+    margin: 0;
+    /* 5px top, 5px right, 75px bottom, 5px left */
+    padding: 5px 5px 75px 5px;
+}
+
+@media (min-width: 768px) {
+    .dashboard-container {
+        max-width: 440px;
+        margin: 0 auto;
+    }
 }
 
 .dash-header {
@@ -375,7 +383,7 @@ select option {
     flex: 1;
     overflow-y: auto;
     max-height: calc(100vh - 150px);
-    padding-bottom: 5px;
+    padding-bottom: 15px;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -796,8 +804,8 @@ input[type=number] {
     bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
-    width: calc(100% - 16px);
-    max-width: 420px;
+    width: calc(100% - 10px); /* Matches 5px left/right margins */
+    max-width: 430px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
