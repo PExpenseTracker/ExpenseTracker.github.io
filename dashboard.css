@@ -491,6 +491,7 @@ select option {
     margin-top: 10px;
 }
 
+/* --- Single-Row Settings Layout with 75px Calendars --- */
 .settings-horizontal-row {
     display: flex;
     align-items: center;
@@ -517,10 +518,10 @@ select option {
     border-radius: 0;
     outline: none;
     padding: 1px 2px;
-    font-size: 9px;
+    font-size: 8.5px;
     font-weight: 700;
     color: var(--text-primary);
-    width: 74px;
+    width: 75px; /* Updated width to 75px */
     text-align: center;
     box-sizing: border-box;
 }
@@ -536,25 +537,23 @@ select option {
 }
 
 .range-separator {
-    font-size: 9px;
+    font-size: 8.5px;
     font-weight: 700;
     color: var(--text-muted);
-    padding: 0 1px;
+    padding: 0;
 }
 
 .paycheck-dropdown {
-    flex: 1;
-    min-width: 70px;
+    width: auto; /* Shrinks the dropdown box to fit its content tightly */
+    min-width: 90px;
     border: none;
     background: transparent;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     color: var(--text-primary);
     outline: none;
-    padding: 0 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    padding: 0 16px 0 2px; /* Leaves room for the native dropdown arrow */
+    text-align: left;
     cursor: pointer;
 }
 
@@ -804,7 +803,7 @@ input[type=number] {
     bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
-    width: calc(100% - 10px); /* Matches 5px left/right margins */
+    width: calc(100% - 10px);
     max-width: 430px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(12px);
