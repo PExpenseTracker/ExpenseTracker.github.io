@@ -31,7 +31,6 @@ body.dashboard-body {
     width: 100%;
     max-width: 100%;
     margin: 0;
-    /* 5px top, 5px right, 75px bottom, 5px left */
     padding: 5px 5px 75px 5px;
 }
 
@@ -154,10 +153,12 @@ body.dashboard-body {
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+    position: relative;
 }
 
 .bills-top-header h3 {
     margin-bottom: 0;
+    flex: 1;
 }
 
 .edit-icon-btn {
@@ -378,7 +379,6 @@ select option {
     overflow-y: auto;
 }
 
-/* Maximized history transaction list filling vertical space with clean scrolling and bottom padding */
 #transactionList {
     flex: 1;
     overflow-y: auto;
@@ -460,9 +460,10 @@ select option {
     color: #ef4444;
 }
 
-.profile-card {
+.profile-card, .profile-header-card {
     text-align: center;
     padding: 16px 12px;
+    position: relative;
 }
 
 .profile-avatar {
@@ -491,7 +492,7 @@ select option {
     margin-top: 10px;
 }
 
-/* --- Single-Row Settings Layout with 75px Calendars --- */
+/* --- Single-Row Settings Layout with Numeric Day Inputs --- */
 .settings-horizontal-row {
     display: flex;
     align-items: center;
@@ -518,12 +519,22 @@ select option {
     border-radius: 0;
     outline: none;
     padding: 1px 2px;
-    font-size: 8.5px;
+    font-size: 10px;
     font-weight: 700;
     color: var(--text-primary);
-    width: 85px;
+    width: 36px;
     text-align: center;
     box-sizing: border-box;
+}
+
+.date-picker-input::-webkit-inner-spin-button, 
+.date-picker-input::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+}
+.date-picker-input {
+    -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 .date-picker-input:disabled {
@@ -537,10 +548,10 @@ select option {
 }
 
 .range-separator {
-    font-size: 8.5px;
+    font-size: 10px;
     font-weight: 700;
     color: var(--text-muted);
-    padding: 0;
+    padding: 0 2px;
 }
 
 .paycheck-dropdown {
@@ -753,16 +764,6 @@ select option {
 
 .line-input-field:focus {
     border-bottom-color: var(--primary);
-}
-
-input[type=number]::-webkit-inner-spin-button, 
-input[type=number]::-webkit-outer-spin-button { 
-    -webkit-appearance: none; 
-    margin: 0; 
-}
-input[type=number] {
-    -moz-appearance: textfield;
-    appearance: textfield;
 }
 
 .form-checkbox-row {
