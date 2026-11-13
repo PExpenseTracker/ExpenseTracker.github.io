@@ -78,7 +78,6 @@
                 
                 <div class="bills-sections-wrapper" style="margin-top: 14px;">
                     <h4>Upcoming Bills</h4>
-                    <!-- Removed min-height so it expands naturally to fit content before scrolling -->
                     <div id="upcomingBillsList" class="bills-list" style="max-height: calc(100vh - 340px); overflow-y: auto;">
                     </div>
                 </div>
@@ -96,7 +95,28 @@
             </div>
         </div>
 
-        <div class="tab-content" id="profileTab">
+        <div class="tab-content" id="profileTab" style="position: relative;">
+            <!-- Month Dropdown & Dynamic 3-Year Dropdown on the top right edge corner -->
+            <div style="position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; z-index: 10; align-items: center;">
+                <select id="profileMonthDropdown" class="line-input-field" style="padding: 4px 6px; border-radius: 6px; border: 1.5px solid var(--border-light); font-weight: 600; background: var(--card-bg); color: var(--text-primary); cursor: pointer; font-size: 11px; outline: none;">
+                    <option value="January">January</option>
+                    <option value="February">February</option>
+                    <option value="March">March</option>
+                    <option value="April">April</option>
+                    <option value="May">May</option>
+                    <option value="June">June</option>
+                    <option value="July">July</option>
+                    <option value="August">August</option>
+                    <option value="September">September</option>
+                    <option value="October">October</option>
+                    <option value="November">November</option>
+                    <option value="December">December</option>
+                </select>
+                <select id="profileYearDropdown" class="line-input-field" style="padding: 4px 6px; border-radius: 6px; border: 1.5px solid var(--border-light); font-weight: 600; background: var(--card-bg); color: var(--text-primary); cursor: pointer; font-size: 11px; outline: none;">
+                    <!-- Dynamically populated via JS -->
+                </select>
+            </div>
+
             <div class="dash-card profile-card">
                 <div class="profile-avatar">⚡</div>
                 <h3 id="profileAccountName">Krazy Doom</h3>
@@ -104,10 +124,11 @@
 
                 <div class="profile-settings-group">
                     <div class="settings-horizontal-row">
+                        <!-- Numeric day inputs (1 to 31) -->
                         <div class="cycle-inputs-group">
-                            <input type="date" class="date-picker-input" id="cycleStartDate" value="2026-11-11" disabled autocomplete="off">
+                            <input type="number" class="date-picker-input day-numeric-input" id="cycleStartDate" value="6" min="1" max="31" disabled autocomplete="off" placeholder="DD">
                             <span class="range-separator">–</span>
-                            <input type="date" class="date-picker-input" id="cycleEndDate" value="2026-11-25" disabled autocomplete="off">
+                            <input type="number" class="date-picker-input day-numeric-input" id="cycleEndDate" value="20" min="1" max="31" disabled autocomplete="off" placeholder="DD">
                         </div>
                         
                         <select class="line-select paycheck-dropdown" id="paycheckTypeDropdown" autocomplete="off">
