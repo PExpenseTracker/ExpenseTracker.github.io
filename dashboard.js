@@ -43,6 +43,33 @@ document.addEventListener('DOMContentLoaded', () => {
         return dateStr;
     }
 
+    const monthsList = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    // Initialize Profile Month and Dynamic 3-Year Dropdowns
+    const profileMonthDropdown = document.getElementById('profileMonthDropdown');
+    const profileYearDropdown = document.getElementById('profileYearDropdown');
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+
+    if (profileMonthDropdown) {
+        profileMonthDropdown.value = monthsList[currentDate.getMonth()];
+    }
+
+    if (profileYearDropdown) {
+        profileYearDropdown.innerHTML = '';
+        const yearsToShow = [currentYear - 1, currentYear, currentYear + 1];
+        
+        yearsToShow.forEach(yr => {
+            const opt = document.createElement('option');
+            opt.value = yr.toString();
+            opt.textContent = yr.toString();
+            if (yr === currentYear) {
+                opt.selected = true;
+            }
+            profileYearDropdown.appendChild(opt);
+        });
+    }
+
     let cachedTransactions = [];
     let cachedBreakdowns = [];
     let cachedBills = [];
@@ -390,7 +417,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return currentBalance + dailyInterest;
     }
 
-    // Helper: Calculates breakdown income. Applies interest ONLY to regular income, keeping Rollover balances strictly fixed.
     function getBreakdownAdjustedIncome(transactionsList, breakdownConfig) {
         const regularIncome = transactionsList
             .filter(t => t.type === 'income' && t.category !== 'Rollover')
@@ -403,6 +429,59 @@ document.addEventListener('DOMContentLoaded', () => {
         return calculateInterestAndTax(regularIncome, breakdownConfig) + rolloverIncome;
     }
 
+    function getCalculatedFullDateString(dayVal, customMonth = null, customYear = null) {
+        const monthName = customMonth || (profileMonthDropdown ? profileMonthDropdown.value : 'November');
+        const yearVal = customYear || (profileYearDropdown ? profileYearDropdown.value : currentYear.toString());
+        const monthIndex = monthsList.indexOf(monthName);
+        const mStr = String(monthIndex >= 0 ? monthIndex + 1 : 1).padStart(2, '0');
+        const dStr = String(parseInt(dayVal) || 1).padStart(2, '0');
+        return `${yearVal}-${mStr}-${dStr}`;
+    }
+
+    function getActiveDateRange() {
+        const monthName = profileMonthDropdown ? profileMonthDropdown.value : 'November';
+        const yearVal = profileYearDropdown ? profileYearDropdown.value : currentYear.toString();
+        const activePaycheck = paycheckTypeDropdown ? paycheckTypeDropdown.value : '1st Paycheck';
+        const ranges = JSON.parse(localStorage.getItem(getStorageKey('paycheck_ranges'))) || {};
+
+        let startDay = 1;
+        let endDay = 31;
+
+        if (activePaycheck === 'Monthly Paycheck') {
+            const r1 = ranges['1st Paycheck'] || { start: '6' };
+            const r2 = ranges['2nd Paycheck'] || { end: '5' };
+            startDay = parseInt(r1.start) || 6;
+            endDay = parseInt(r2.end) || 5;
+        } else if (ranges[activePaycheck]) {
+            startDay = parseInt(ranges[activePaycheck].start) || 1;
+            endDay = parseInt(ranges[activePaycheck].end) || 31;
+        } else if (cycleStartDate && cycleEndDate) {
+            startDay = parseInt(cycleStartDate.value) || 1;
+            endDay = parseInt(cycleEndDate.value) || 31;
+        }
+
+        const startDateStr = getCalculatedFullDateString(startDay, monthName, yearVal);
+        
+        let endMonthName = monthName;
+        let endYearVal = parseInt(yearVal);
+        if (endDay < startDay) {
+            let mIdx = monthsList.indexOf(monthName);
+            mIdx++;
+            if (mIdx > 11) {
+                mIdx = 0;
+                endYearVal++;
+            }
+            endMonthName = monthsList[mIdx];
+        }
+
+        const endDateStr = getCalculatedFullDateString(endDay, endMonthName, endYearVal.toString());
+
+        return {
+            startDate: new Date(startDateStr + 'T00:00:00'),
+            endDate: new Date(endDateStr + 'T23:59:59')
+        };
+    }
+
     async function processPaycheckRollover(targetPaycheck) {
         if (targetPaycheck !== '2nd Paycheck' || !supabaseClient) return;
         const prefix = getTablePrefix();
@@ -412,11 +491,11 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const b of breakdowns) {
             const relTrans1st = transactions.filter(t => 
                 t.breakdown_type && 
+                b.breakdownType &&
                 t.breakdown_type.trim().toLowerCase() === b.breakdownType.trim().toLowerCase() &&
                 t.paycheck_type === '1st Paycheck'
             );
 
-            // Exactly capture the final displayed 1st Paycheck total
             const adjustedIncome1st = getBreakdownAdjustedIncome(relTrans1st, b);
             const exp1st = relTrans1st.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
             const remainingBalance = Number((adjustedIncome1st - exp1st).toFixed(2));
@@ -425,10 +504,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 t.paycheck_type === '2nd Paycheck' &&
                 t.category === 'Rollover' &&
                 t.breakdown_type &&
+                b.breakdownType &&
                 t.breakdown_type.trim().toLowerCase() === b.breakdownType.trim().toLowerCase()
             );
 
-            const rolloverDate = cycleStartDate ? normalizeDateToISO(cycleStartDate.value) : getTodayDateString();
+            const rolloverDate = cycleStartDate ? getCalculatedFullDateString(cycleStartDate.value) : getTodayDateString();
 
             if (remainingBalance > 0) {
                 if (existingRolloverTx) {
@@ -487,10 +567,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const ranges = JSON.parse(localStorage.getItem(getStorageKey('paycheck_ranges'))) || {};
         
         if (paycheckName === 'Monthly Paycheck') {
-            const range1 = ranges['1st Paycheck'] || { start: '2026-11-06', end: '2026-11-20' };
-            const range2 = ranges['2nd Paycheck'] || { start: '2026-11-21', end: '2026-12-05' };
-            if (cycleStartDate) { cycleStartDate.value = normalizeDateToISO(range1.start); cycleStartDate.disabled = true; }
-            if (cycleEndDate) { cycleEndDate.value = normalizeDateToISO(range2.end); cycleEndDate.disabled = true; }
+            const range1 = ranges['1st Paycheck'] || { start: '6' };
+            const range2 = ranges['2nd Paycheck'] || { end: '20' };
+            if (cycleStartDate) { cycleStartDate.value = range1.start || '6'; cycleStartDate.disabled = true; }
+            if (cycleEndDate) { cycleEndDate.value = range2.end || '20'; cycleEndDate.disabled = true; }
             return;
         }
 
@@ -498,15 +578,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cycleEndDate) cycleEndDate.disabled = false;
 
         if (ranges[paycheckName]) {
-            if (cycleStartDate) cycleStartDate.value = normalizeDateToISO(ranges[paycheckName].start);
-            if (cycleEndDate) cycleEndDate.value = normalizeDateToISO(ranges[paycheckName].end);
+            if (cycleStartDate) cycleStartDate.value = ranges[paycheckName].start || '6';
+            if (cycleEndDate) cycleEndDate.value = ranges[paycheckName].end || '20';
         } else {
             if (paycheckName === '1st Paycheck') {
-                if (cycleStartDate) cycleStartDate.value = '2026-11-06';
-                if (cycleEndDate) cycleEndDate.value = '2026-11-20';
+                if (cycleStartDate) cycleStartDate.value = '6';
+                if (cycleEndDate) cycleEndDate.value = '20';
             } else if (paycheckName === '2nd Paycheck') {
-                if (cycleStartDate) cycleStartDate.value = '2026-11-21';
-                if (cycleEndDate) cycleEndDate.value = '2026-12-05';
+                if (cycleStartDate) cycleStartDate.value = '21';
+                if (cycleEndDate) cycleEndDate.value = '5';
             }
             saveCurrentDateRange();
         }
@@ -519,8 +599,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const ranges = JSON.parse(localStorage.getItem(getStorageKey('paycheck_ranges'))) || {};
         ranges[activePaycheck] = {
-            start: normalizeDateToISO(cycleStartDate.value),
-            end: normalizeDateToISO(cycleEndDate.value)
+            start: cycleStartDate.value || '1',
+            end: cycleEndDate.value || '31'
         };
         localStorage.setItem(getStorageKey('paycheck_ranges'), JSON.stringify(ranges));
         updateUI();
@@ -543,6 +623,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (profileMonthDropdown) {
+        profileMonthDropdown.addEventListener('change', () => {
+            renderBreakdowns();
+            renderBillsAndDaily();
+            updateUI();
+        });
+    }
+    if (profileYearDropdown) {
+        profileYearDropdown.addEventListener('change', () => {
+            renderBreakdowns();
+            renderBillsAndDaily();
+            updateUI();
+        });
+    }
+
     function formatDateToFullHuman(dateString) {
         if (!dateString) return '';
         const isoDate = normalizeDateToISO(dateString);
@@ -553,12 +648,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function getFilteredTransactionsForView() {
         const transactions = fetchSupabaseTransactions();
         const activePaycheck = paycheckTypeDropdown ? paycheckTypeDropdown.value : '1st Paycheck';
+        const { startDate, endDate } = getActiveDateRange();
 
-        if (activePaycheck === 'Monthly Paycheck') {
-            return transactions.filter(t => t.category !== 'Rollover');
-        } else {
-            return transactions.filter(t => t.paycheck_type === activePaycheck);
-        }
+        return transactions.filter(t => {
+            if (!t.full_date) return false;
+            const tDate = new Date(normalizeDateToISO(t.full_date) + 'T00:00:00');
+            const inDateRange = tDate >= startDate && tDate <= endDate;
+            if (!inDateRange) return false;
+
+            if (activePaycheck === 'Monthly Paycheck') {
+                return t.category !== 'Rollover';
+            } else {
+                return t.paycheck_type === activePaycheck;
+            }
+        });
     }
 
     function renderBreakdowns() {
@@ -597,15 +700,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const bills = getBills();
         const filteredTransactions = getFilteredTransactionsForView();
         const activePaycheck = paycheckTypeDropdown ? paycheckTypeDropdown.value : '1st Paycheck';
-        const ranges = JSON.parse(localStorage.getItem(getStorageKey('paycheck_ranges'))) || {};
-
-        let startDateObj = null;
-        let endDateObj = null;
-        if (activePaycheck !== 'Monthly Paycheck' && ranges[activePaycheck]) {
-            const range = ranges[activePaycheck];
-            startDateObj = new Date(normalizeDateToISO(range.start) + 'T00:00:00');
-            endDateObj = new Date(normalizeDateToISO(range.end) + 'T23:59:59');
-        }
+        const { startDate, endDate } = getActiveDateRange();
 
         let paidBillsList = filteredTransactions.filter(t => t.type === 'expense').map(t => ({
             id: t.id,
@@ -615,20 +710,24 @@ document.addEventListener('DOMContentLoaded', () => {
             isPaid: true
         }));
 
-        paidBillsList.sort((a, b) => {
-            const dateA = a.dueDate ? normalizeDateToISO(a.dueDate) : '0000-00-00';
-            const dateB = b.dueDate ? normalizeDateToISO(b.dueDate) : '0000-00-00';
-            return dateB.localeCompare(dateA);
+        const paidBillSignatures = new Set(
+            paidBillsList.map(p => `${(p.type || '').trim().toLowerCase()}_${Number(p.amount).toFixed(2)}`)
+        );
+        const paidBillTypes = new Set(
+            paidBillsList.map(p => (p.type || '').trim().toLowerCase())
+        );
+
+        let filteredBills = bills.filter(b => {
+            const bName = (b.type || '').trim().toLowerCase();
+            const bSig = `${bName}_${Number(b.amount).toFixed(2)}`;
+            return !paidBillSignatures.has(bSig) && !paidBillTypes.has(bName);
         });
 
-        let filteredBills = bills;
-        if (startDateObj && endDateObj) {
-            filteredBills = bills.filter(b => {
-                if (!b.dueDate) return true;
-                const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
-                return dueDateObj >= startDateObj && dueDateObj <= endDateObj;
-            });
-        }
+        filteredBills = filteredBills.filter(b => {
+            if (!b.dueDate) return true;
+            const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
+            return dueDateObj >= startDate && dueDateObj <= endDate;
+        });
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -651,56 +750,56 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        const sortByDate = (x, y) => {
+        const sortByDateAndAmount = (x, y) => {
             const dateA = x.dueDate ? normalizeDateToISO(x.dueDate) : '9999-12-31';
             const dateB = y.dueDate ? normalizeDateToISO(y.dueDate) : '9999-12-31';
-            return dateA.localeCompare(dateB);
+            if (dateA !== dateB) return dateA.localeCompare(dateB);
+            return Number(y.amount) - Number(x.amount);
         };
 
-        redBills.sort(sortByDate);
-        otherBills.sort(sortByDate);
+        redBills.sort(sortByDateAndAmount);
+        otherBills.sort(sortByDateAndAmount);
+
+        const upcomingItems = [...redBills, ...otherBills];
+        const totalUpcomingAmount = upcomingItems.reduce((sum, b) => sum + Number(b.amount || 0), 0);
+
+        const sectionHeaderEls = document.querySelectorAll('h3, .section-title, h2');
+        sectionHeaderEls.forEach(el => {
+            if (el.textContent.trim().includes('Manage Bills')) {
+                el.style.display = 'flex';
+                el.style.alignItems = 'center';
+                el.style.position = 'relative';
+                
+                el.innerHTML = `
+                    <span>Manage Bills & Finances</span>
+                    <span style="color: #ef4444; font-weight: 700; margin-left: auto; margin-right: 48px; white-space: nowrap;">- ( ${formatCurrency(totalUpcomingAmount)} ) -</span>
+                `;
+            }
+        });
 
         if (upcomingBillsList) {
             upcomingBillsList.innerHTML = '';
 
-            const allDisplayItems = [
-                ...paidBillsList.map(b => ({ ...b, section: 'paid' })),
-                ...redBills.map(b => ({ ...b, section: 'upcoming_red' })),
-                ...otherBills.map(b => ({ ...b, section: 'upcoming_other' }))
-            ];
-
-            if (allDisplayItems.length === 0) {
-                upcomingBillsList.innerHTML = `<div class="empty-state">No bills or payments for ${activePaycheck}.</div>`;
+            if (upcomingItems.length === 0) {
+                upcomingBillsList.innerHTML = `<div class="empty-state">No upcoming bills for ${activePaycheck}.</div>`;
             } else {
-                allDisplayItems.forEach((b) => {
+                upcomingItems.forEach((b) => {
+                    const originalIndex = bills.findIndex(item => item.id === b.id);
                     const item = document.createElement('div');
-                    
-                    if (b.section === 'paid') {
-                        item.className = 'bill-item bill-green';
-                        item.innerHTML = `
-                            <div class="bill-info">
-                                <span class="trans-title">${b.type} (Paid)</span>
-                                <span class="trans-sub">Paid on: ${formatDateToFullHuman(b.dueDate)}</span>
-                            </div>
-                            <span class="trans-amount bill-green-amount">${formatCurrency(parseFloat(b.amount))}</span>
-                        `;
-                    } else {
-                        const originalIndex = bills.findIndex(item => item.id === b.id);
-                        item.className = `bill-item ${b.colorClass}`;
-                        if (isEditMode) {
-                            item.style.cursor = 'pointer';
-                            item.title = 'Click to edit this bill';
-                            item.addEventListener('click', () => { openEditBillModal(originalIndex); });
-                        }
-                        const amountColorClass = b.colorClass === 'bill-red' ? 'bill-red-amount' : 'bill-blue-amount';
-                        item.innerHTML = `
-                            <div class="bill-info">
-                                <span class="trans-title">${b.type}</span>
-                                <span class="trans-sub">Due: ${formatDateToFullHuman(b.dueDate)}</span>
-                            </div>
-                            <span class="trans-amount ${amountColorClass}">${formatCurrency(parseFloat(b.amount))}</span>
-                        `;
+                    item.className = `bill-item ${b.colorClass}`;
+                    if (isEditMode) {
+                        item.style.cursor = 'pointer';
+                        item.title = 'Click to edit this bill';
+                        item.addEventListener('click', () => { openEditBillModal(originalIndex); });
                     }
+                    const amountColorClass = b.colorClass === 'bill-red' ? 'bill-red-amount' : 'bill-blue-amount';
+                    item.innerHTML = `
+                        <div class="bill-info">
+                            <span class="trans-title">${b.type}</span>
+                            <span class="trans-sub">Due: ${formatDateToFullHuman(b.dueDate)}</span>
+                        </div>
+                        <span class="trans-amount ${amountColorClass}">${formatCurrency(parseFloat(b.amount))}</span>
+                    `;
                     upcomingBillsList.appendChild(item);
                 });
             }
@@ -1108,25 +1207,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const bills = getBills();
             const breakdowns = getBreakdowns();
             const activePaycheck = paycheckTypeDropdown ? paycheckTypeDropdown.value : '1st Paycheck';
-            const ranges = JSON.parse(localStorage.getItem(getStorageKey('paycheck_ranges'))) || {};
+            const { startDate, endDate } = getActiveDateRange();
 
-            let filteredBills = bills;
-            if (activePaycheck !== 'Monthly Paycheck' && ranges[activePaycheck]) {
-                const range = ranges[activePaycheck];
-                const startDate = new Date(normalizeDateToISO(range.start) + 'T00:00:00');
-                const endDate = new Date(normalizeDateToISO(range.end) + 'T23:59:59');
-
-                filteredBills = bills.filter(b => {
-                    if (!b.dueDate) return true;
-                    const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
-                    return dueDateObj >= startDate && dueDateObj <= endDate;
-                });
-            }
+            let filteredBills = bills.filter(b => {
+                if (!b.dueDate) return true;
+                const dueDateObj = new Date(normalizeDateToISO(b.dueDate) + 'T00:00:00');
+                return dueDateObj >= startDate && dueDateObj <= endDate;
+            });
 
             filteredBills.sort((a, b) => {
                 const dateA = a.dueDate ? normalizeDateToISO(a.dueDate) : '9999-12-31';
                 const dateB = b.dueDate ? normalizeDateToISO(b.dueDate) : '9999-12-31';
-                return dateA.localeCompare(dateB);
+                if (dateA !== dateB) return dateA.localeCompare(dateB);
+                return Number(b.amount) - Number(a.amount);
             });
 
             if (selectEncodedBill) {
@@ -1464,7 +1557,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const activePaycheck = paycheckTypeDropdown ? paycheckTypeDropdown.value : '1st Paycheck';
 
             if (activePaycheck === 'Monthly Paycheck') {
-                alert('Monthly Paycheck dates are automatically calculated from the 1st and 2nd Paycheck ranges.');
+                alert('Monthly Paycheck dates are automatically combined from the 1st Paycheck start day and 2nd Paycheck end day.');
                 return;
             }
 
@@ -1479,8 +1572,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (cycleStartDate && cycleEndDate) {
-        cycleStartDate.addEventListener('change', saveCurrentDateRange);
-        cycleEndDate.addEventListener('change', saveCurrentDateRange);
+        cycleStartDate.addEventListener('input', () => {
+            saveCurrentDateRange();
+        });
+        cycleEndDate.addEventListener('input', () => {
+            saveCurrentDateRange();
+        });
     }
 
     function updateUI() {
@@ -1523,11 +1620,30 @@ document.addEventListener('DOMContentLoaded', () => {
             transactionList.innerHTML = '';
 
             if (filteredTransactions.length === 0) {
-                transactionList.innerHTML = `<li class="empty-state">No transactions recorded for ${activePaycheck}.</li>`;
+                transactionList.innerHTML = `<li class="empty-state">No transactions recorded for this period.</li>`;
                 return;
             }
 
-            filteredTransactions.forEach(t => {
+            const historyComparator = (a, b) => {
+                const dateA = a.full_date ? normalizeDateToISO(a.full_date) : '0000-00-00';
+                const dateB = b.full_date ? normalizeDateToISO(b.full_date) : '0000-00-00';
+                if (dateB !== dateA) {
+                    return dateB.localeCompare(dateA);
+                }
+                return Number(b.amount) - Number(a.amount);
+            };
+
+            const paidBillsHistory = filteredTransactions
+                .filter(t => t.type === 'expense')
+                .sort(historyComparator);
+
+            const incomeHistory = filteredTransactions
+                .filter(t => t.type === 'income')
+                .sort(historyComparator);
+
+            const sortedHistoryTransactions = [...paidBillsHistory, ...incomeHistory];
+
+            sortedHistoryTransactions.forEach(t => {
                 const li = document.createElement('li');
                 li.className = `transaction-item ${t.type}`;
                 
