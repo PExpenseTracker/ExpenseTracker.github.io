@@ -1,1 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Expense Tracker - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dashboard.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Supabase JS Client CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="dashboard-body">
 
+    <div class="dashboard-container">
+        <header class="dash-header">
+            <div class="brand-logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text" id="currentAccountTitle">Krazy Doom</span>
+            </div>
+            <button type="button" class="submit-btn" id="switchAccountBtn">Switch</button>
+        </header>
+
+        <div class="tab-content active" id="homeTab">
+            <div class="metrics-grid">
+                <div class="metric-card income">
+                    <span class="metric-label">Income</span>
+                    <h2 id="totalIncome">₱0.00</h2>
+                </div>
+                <div class="metric-card expense">
+                    <span class="metric-label">Expenses</span>
+                    <h2 id="totalExpense">₱0.00</h2>
+                </div>
+                <div class="metric-card balance">
+                    <span class="metric-label">Total Balance</span>
+                    <h2 id="totalBalance">₱0.00</h2>
+                </div>
+            </div>
+
+            <!-- 1. Income Progress First -->
+            <div class="dash-content" style="margin-bottom: 14px;">
+                <section class="dash-card">
+                    <div class="bills-top-header">
+                        <h3>Income Progress</h3>
+                    </div>
+                    <div id="homeIncomeAnalyticsList" class="income-progress-list" style="margin-top: 14px;">
+                    </div>
+                </section>
+            </div>
+
+            <!-- 2. Expense Breakdown Pie Chart Second -->
+            <div class="dash-card" style="margin-bottom: 14px;">
+                <div class="bills-top-header">
+                    <h3>Expense Breakdown</h3>
+                </div>
+                <div style="text-align: center; padding: 10px 0;">
+                    <canvas id="expensePieChart" style="max-width: 220px; margin: 0 auto;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bills Tab -->
+        <div class="tab-content" id="billsTab">
+            <div class="dash-card">
+                <div class="bills-top-header">
+                    <h3>Manage Bills & Finances</h3>
+                    <button type="button" class="edit-icon-btn" id="toggleEditBillsBtn" title="Edit Bills">✎</button>
+                </div>
+                
+                <div class="bills-action-buttons-grid">
+                    <button type="button" class="submit-btn" id="btnChoiceBills">Bills</button>
+                    <button type="button" class="submit-btn" id="btnChoiceToBePaid">To Be Paid</button>
+                    <button type="button" class="submit-btn" id="btnChoiceDaily">Daily</button>
+                    <button type="button" class="submit-btn" id="btnChoiceIncome">Income</button>
+                </div>
+                
+                <div class="bills-sections-wrapper" style="margin-top: 14px;">
+                    <h4>Upcoming Bills</h4>
+                    <div id="upcomingBillsList" class="bills-list" style="max-height: calc(100vh - 340px); overflow-y: auto;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="historyTab">
+            <div class="dash-card">
+                <div class="history-header">
+                    <h3>Transaction History</h3>
+                    <span id="itemCount" class="badge">0 items</span>
+                </div>
+                <ul id="transactionList" class="transaction-list">
+                </ul>
+            </div>
+        </div>
+
+        <div class="tab-content" id="profileTab" style="position: relative;">
+            <!-- Month Dropdown & Dynamic 3-Year Dropdown on the top right edge corner -->
+            <div style="position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; z-index: 10; align-items: center;">
+                <select id="profileMonthDropdown" class="line-input-field" style="padding: 4px 6px; border-radius: 6px; border: 1.5px solid var(--border-light); font-weight: 600; background: var(--card-bg); color: var(--text-primary); cursor: pointer; font-size: 11px; outline: none;">
+                    <option value="January">January</option>
+                    <option value="February">February</option>
+                    <option value="March">March</option>
+                    <option value="April">April</option>
+                    <option value="May">May</option>
+                    <option value="June">June</option>
+                    <option value="July">July</option>
+                    <option value="August">August</option>
+                    <option value="September">September</option>
+                    <option value="October">October</option>
+                    <option value="November">November</option>
+                    <option value="December">December</option>
+                </select>
+                <select id="profileYearDropdown" class="line-input-field" style="padding: 4px 6px; border-radius: 6px; border: 1.5px solid var(--border-light); font-weight: 600; background: var(--card-bg); color: var(--text-primary); cursor: pointer; font-size: 11px; outline: none;">
+                    <!-- Dynamically populated via JS -->
+                </select>
+            </div>
+
+            <div class="dash-card profile-card">
+                <div class="profile-avatar">⚡</div>
+                <h3 id="profileAccountName">Krazy Doom</h3>
+                <p class="profile-sub">Active Account</p>
+
+                <div class="profile-settings-group">
+                    <div class="settings-horizontal-row">
+                        <!-- Numeric day inputs (1 to 31) -->
+                        <div class="cycle-inputs-group">
+                            <input type="number" class="date-picker-input day-numeric-input" id="cycleStartDate" value="6" min="1" max="31" disabled autocomplete="off" placeholder="DD">
+                            <span class="range-separator">–</span>
+                            <input type="number" class="date-picker-input day-numeric-input" id="cycleEndDate" value="20" min="1" max="31" disabled autocomplete="off" placeholder="DD">
+                        </div>
+                        
+                        <select class="line-select paycheck-dropdown" id="paycheckTypeDropdown" autocomplete="off">
+                            <option value="1st Paycheck">1st Paycheck</option>
+                            <option value="2nd Paycheck">2nd Paycheck</option>
+                            <option value="Monthly Paycheck">Monthly Paycheck</option>
+                        </select>
+
+                        <div class="paycheck-actions">
+                            <button class="p-action-btn plus-btn" type="button" id="openModalBtn" title="Add Breakdown">+</button>
+                            <button class="p-action-btn minus-btn" type="button" id="openDeleteModalBtn" title="Delete Breakdown">-</button>
+                            <button class="p-action-btn edit-paycheck-btn" type="button" title="Edit">✎</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="breakdown-container-section">
+                <h3>Income Breakdowns</h3>
+                <div id="breakdownListContainer" class="breakdown-list">
+                </div>
+            </div>
+        </div>
+
+        <!-- Bills / Daily Form Modal -->
+        <div class="modal-overlay" id="billFormModal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3 id="billFormTitle">Add Bill</h3>
+                    <button class="modal-close-btn" id="closeBillFormModalBtn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-row-line">
+                        <label>Type</label>
+                        <input type="text" id="billTypeInput" class="line-input-field" autocomplete="off">
+                        <select id="billTypeSelect" class="line-input-field hidden" style="background: transparent; outline: none; cursor: pointer;" autocomplete="off">
+                        </select>
+                    </div>
+                    <div class="modal-row-line">
+                        <label>Amount</label>
+                        <input type="text" id="billAmountInput" class="line-input-field" inputmode="decimal" autocomplete="off">
+                    </div>
+                    <div class="modal-row-line">
+                        <label>Due Date</label>
+                        <input type="date" id="billDueDateInput" class="line-input-field" autocomplete="off">
+                    </div>
+
+                    <!-- Deduct From Dropdown for Daily Expenses -->
+                    <div class="modal-row-line hidden" id="dailyDeductWrapper">
+                        <label>Deduct To</label>
+                        <select id="selectDailyDeductBreakdown" class="line-input-field" style="background: transparent; outline: none; cursor: pointer;" autocomplete="off">
+                        </select>
+                    </div>
+
+                    <!-- Frequency Selector Row -->
+                    <div class="frequency-row" style="margin: 10px 0;">
+                        <label class="freq-option">
+                            <input type="radio" name="billFrequency" value="once" checked autocomplete="off"> Once
+                        </label>
+                        <label class="freq-option">
+                            <input type="radio" name="billFrequency" value="monthly" autocomplete="off"> Monthly
+                        </label>
+                        <label class="freq-option">
+                            <input type="radio" name="billFrequency" value="permanent" autocomplete="off"> Permanent
+                        </label>
+                    </div>
+
+                    <!-- Conditional Monthly Duration Input -->
+                    <div class="modal-row-line hidden" id="monthlyDurationWrapper">
+                        <label>Months</label>
+                        <input type="number" id="billTotalMonthsInput" class="line-input-field" inputmode="numeric" placeholder="" min="1" autocomplete="off">
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-top: 14px;">
+                        <button type="button" class="submit-btn" id="saveBillBtn" style="flex: 1;">Save</button>
+                        <button type="button" class="submit-btn" id="cancelBillBtn" style="flex: 1; background: #64748b;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- To Be Paid Modal -->
+        <div class="modal-overlay" id="toBePaidModal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>To Be Paid</h3>
+                    <button class="modal-close-btn" id="closeToBePaidModalBtn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-row-line">
+                        <label>Type</label>
+                        <select id="selectEncodedBill" class="line-input-field" style="background: transparent; outline: none; cursor: pointer;" autocomplete="off">
+                        </select>
+                    </div>
+                    <div class="modal-row-line">
+                        <label>Amount</label>
+                        <input type="text" id="paidAmountDisplay" class="line-input-field" disabled autocomplete="off">
+                    </div>
+                    <div class="modal-row-line">
+                        <label>Due Date</label>
+                        <input type="date" id="paidDueDateDisplay" class="line-input-field" disabled autocomplete="off">
+                    </div>
+                    <div class="modal-row-line">
+                        <label>Deduct To</label>
+                        <select id="selectDeductBreakdown" class="line-input-field" style="background: transparent; outline: none; cursor: pointer;" autocomplete="off">
+                        </select>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-top: 14px;">
+                        <button type="button" class="submit-btn" id="confirmPaidBtn" style="flex: 1; background: var(--accent);">Paid</button>
+                        <button type="button" class="submit-btn" id="cancelPaidBtn" style="flex: 1; background: #64748b;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Income Form Modal -->
+        <div class="modal-overlay" id="incomeEntryModal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Add Income</h3>
+                    <button class="modal-close-btn" id="closeIncomeModalBtn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-row-line">
+                        <label>Type</label>
+                        <select id="selectIncomeBreakdownType" class="line-input-field" style="background: transparent; outline: none; cursor: pointer;" autocomplete="off">
+                        </select>
+                    </div>
+                    <div class="modal-row-line">
+                        <label>Amount</label>
+                        <input type="text" id="incomeEntryAmount" class="line-input-field" inputmode="decimal" autocomplete="off">
+                    </div>
+                    <div class="modal-row-line">
+                        <label>Date</label>
+                        <input type="date" id="incomeEntryDate" class="line-input-field" autocomplete="off">
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-top: 14px;">
+                        <button type="button" class="submit-btn" id="saveIncomeEntryBtn" style="flex: 1;">Save</button>
+                        <button type="button" class="submit-btn" id="cancelIncomeEntryBtn" style="flex: 1; background: #64748b;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Income Breakdown Modal Popup (+) -->
+        <div class="modal-overlay" id="breakdownModal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Income Breakdown</h3>
+                    <button class="modal-close-btn" id="closeModalBtn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-row-line">
+                        <label>Type</label>
+                        <input type="text" id="breakdownType" class="line-input-field" autocomplete="off">
+                    </div>
+
+                    <div class="form-checkbox-row">
+                        <input type="checkbox" id="enableInterestCheck" autocomplete="off">
+                        <label for="enableInterestCheck">Rate / Interest</label>
+                    </div>
+
+                    <div id="conditionalInterestFields" class="conditional-fields hidden">
+                        <div class="modal-row-line">
+                            <label>Interest %</label>
+                            <input type="text" id="interestRate" class="line-input-field" inputmode="decimal" autocomplete="off">
+                        </div>
+                        <div class="modal-row-line">
+                            <label>P.A.(Days)</label>
+                            <input type="text" id="paDays" class="line-input-field" inputmode="numeric" autocomplete="off">
+                        </div>
+                        <div class="modal-row-line">
+                            <label>WHTAX%</label>
+                            <input type="text" id="whtaxPercent" class="line-input-field" inputmode="decimal" autocomplete="off">
+                        </div>
+                    </div>
+
+                    <button type="button" class="submit-btn" id="saveBreakdownBtn" style="margin-top: 14px;">Save Breakdown</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Breakdown Modal Popup (-) -->
+        <div class="modal-overlay" id="deleteBreakdownModal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Delete Income Breakdown</h3>
+                    <button class="modal-close-btn" id="closeDeleteModalBtn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-row-line">
+                        <label>Type</label>
+                        <select id="deleteBreakdownSelect" class="line-input-field" style="background: transparent; outline: none; cursor: pointer;" autocomplete="off">
+                        </select>
+                    </div>
+
+                    <button type="button" class="submit-btn" id="confirmDeleteBreakdownBtn" style="margin-top: 14px; background: #ef4444;">Delete Breakdown</button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-target="homeTab" type="button">
+                <div class="icon-badge home-bg">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 10.7L12 3.5L20 10.7V19C20 19.6 19.6 20 19 20H15V14H9V20H5C4.4 20 4 19.6 4 19V10.7Z" fill="currentColor" opacity="0.2"/>
+                        <path d="M3.3 11.5L12 3.7L20.7 11.5M19 10.7V19C20 19.6 19.6 20 19 20H15V14H9V20H5C4.4 20 4 19.6 4 19V10.7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span>Home</span>
+            </button>
+
+            <button class="nav-item" data-target="billsTab" type="button">
+                <div class="icon-badge bills-bg">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 5H5C3.9 5 3 5.9 3 7V17C3 18.1 3.9 19 5 19H19C20.1 19 21 18.1 21 17V7C21 5.9 20.1 5 19 5Z" fill="currentColor" opacity="0.2"/>
+                        <path d="M19 5H5C3.9 5 3 5.9 3 7V17C3 18.1 3.9 19 5 19H19C20.1 19 21 18.1 21 17V7C21 5.9 20.1 5 19 5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M16 12C16 13.1 15.1 14 14 14C12.9 14 12 13.1 12 12C12 10.9 12.9 10 14 10C15.1 10 16 10.9 16 12Z" stroke="currentColor" stroke-width="2"/>
+                        <path d="M3 9H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span>Bills</span>
+            </button>
+
+            <button class="nav-item" data-target="historyTab" type="button">
+                <div class="icon-badge history-bg">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 22C17.5 22 22 17.5 22 12C22 6.5 17.5 2 12 2C6.5 2 2 6.5 2 12C2 17.5 6.5 22 12 22Z" fill="currentColor" opacity="0.2"/>
+                        <path d="M12 22C17.5 22 22 17.5 22 12C22 6.5 17.5 2 12 2C6.5 2 2 6.5 2 12C2 17.5 6.5 22 12 22Z" stroke="currentColor" stroke-width="2"/>
+                        <path d="M12 6V12L16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span>History</span>
+            </button>
+
+            <button class="nav-item" data-target="profileTab" type="button">
+                <div class="icon-badge profile-bg">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path style="mix-blend-mode: normal;" d="M12 11C14.2 11 16 9.2 16 7C16 4.8 14.2 3 12 3C9.8 3 8 4.8 8 7C8 9.2 9.8 11 12 11Z" fill="currentColor" opacity="0.2"/>
+                        <path d="M12 11C14.2 11 16 9.2 16 7C16 4.8 14.2 3 12 3C9.8 3 8 4.8 8 7C8 9.2 9.8 11 12 11Z" stroke="currentColor" stroke-width="2"/>
+                        <path d="M4 21C4 17.1 7.6 14 12 14C16.4 14 20 17.1 20 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span>Profile</span>
+            </button>
+        </nav>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
