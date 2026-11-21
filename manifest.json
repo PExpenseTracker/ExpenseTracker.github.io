@@ -1,0 +1,23 @@
+{
+  "name": "Expense Tracker",
+  "short_name": "Expenses",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#b7f5cf",
+  "theme_color": "#b7f5cf",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23b7f5cf'/%3E%3Cg fill='none' stroke-width='22' stroke-linecap='round'%3E%3Cpath d='M 61 46 A 56 56 0 0 1 150 86' stroke='%230d923d'/%3E%3Cpath d='M 150 106 A 56 56 0 0 1 106 150' stroke='%2322c55e'/%3E%3Cpath d='M 86 150 A 56 56 0 0 1 46 61' stroke='%2311a146'/%3E%3C/g%3E%3Ctext x='96' y='115' text-anchor='middle' font-family='Plus Jakarta Sans, Arial, sans-serif' font-size='56' font-weight='800' fill='%230d923d'%3E%24%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23b7f5cf'/%3E%3Cg fill='none' stroke-width='58' stroke-linecap='round'%3E%3Cpath d='M 163 123 A 150 150 0 0 1 400 230' stroke='%230d923d'/%3E%3Cpath d='M 400 282 A 150 150 0 0 1 282 400' stroke='%2322c55e'/%3E%3Cpath d='M 230 400 A 150 150 0 0 1 123 163' stroke='%2311a146'/%3E%3C/g%3E%3Ctext x='256' y='306' text-anchor='middle' font-family='Plus Jakarta Sans, Arial, sans-serif' font-size='148' font-weight='800' fill='%230d923d'%3E%24%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
