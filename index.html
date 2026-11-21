@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Mobile Expense Tracker</title>
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div class="app-scroll-area">
+      <header class="header">
+        <h1 id="page-title">Dashboard</h1>
+        <div class="header-actions">
+          <button id="theme-toggle-btn" class="icon-toggle-btn" type="button" aria-label="Toggle dark mode" aria-pressed="false" hidden>
+            <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+            <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+          <button id="open-sheet-btn" class="top-add-btn" type="button" aria-label="Add transaction">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- DASHBOARD VIEW -->
+      <main id="view-dashboard" class="view">
+        <section class="summary-pair" aria-label="Income and Expense summary">
+          <div class="stat-card income-card">
+            <div class="stat-top">
+              <span class="stat-label">Income</span>
+              <span class="badge-circle badge-green" aria-hidden="true">+</span>
+            </div>
+            <div id="income-amount" class="stat-value"></div>
+          </div>
+          <div class="stat-card expense-card">
+            <div class="stat-top">
+              <span class="stat-label">Expense</span>
+              <span class="badge-circle badge-red" aria-hidden="true">-</span>
+            </div>
+            <div id="expense-amount" class="stat-value"></div>
+          </div>
+        </section>
+
+        <section class="balance-card" aria-label="Balance summary">
+          <div class="balance-top">
+            <span class="balance-label">Balance</span>
+          </div>
+          <div id="balance-amount" class="balance-value"></div>
+          <div class="progress-track">
+            <div id="savings-bar-fill" class="progress-fill" style="width: 0%;"></div>
+          </div>
+          <div id="savings-progressbar" class="sr-only" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+        </section>
+
+        <section class="dash-section" aria-label="Graph analysis">
+          <h2 class="section-heading">Graph Analysis</h2>
+          <div class="chart-card">
+            <svg id="graph-analysis-svg" class="analysis-svg" viewBox="0 0 320 144" role="img" aria-label="Income and expense line chart">
+              <line x1="32" y1="16" x2="32" y2="124" stroke="#cbd5e1" stroke-width="1.2" />
+              <line x1="32" y1="124" x2="306" y2="124" stroke="#cbd5e1" stroke-width="1.2" />
+              <polyline id="line-income" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="" />
+              <polyline id="line-expense" fill="none" stroke="#e11d48" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="" />
+              <g id="dots-income"></g>
+              <g id="dots-expense"></g>
+              <g id="chart-x-labels"></g>
+            </svg>
+          </div>
+        </section>
+
+        <section class="dash-section" aria-label="Income progress">
+          <h2 class="section-heading">Income Progress</h2>
+          <div class="progress-card">
+            <ul id="income-progress-list" class="income-progress-list"></ul>
+          </div>
+        </section>
+      </main>
+
+      <!-- TRANSACTIONS VIEW -->
+      <section id="view-transactions" class="view" hidden>
+        <div id="tx-context-bar" class="tx-context-bar">
+          <span id="tx-ctx-week" class="tx-ctx-seg tx-ctx-week" aria-hidden="true"></span>
+          <span class="tx-ctx-div" aria-hidden="true">|</span>
+          <span id="tx-ctx-half" class="tx-ctx-seg tx-ctx-half" aria-hidden="true"></span>
+          <span class="tx-ctx-div" aria-hidden="true">|</span>
+          <span id="tx-ctx-month" class="tx-ctx-seg tx-ctx-month" aria-hidden="true"></span>
+          <span class="tx-ctx-div" aria-hidden="true">|</span>
+          <span id="tx-ctx-year" class="tx-ctx-seg tx-ctx-year" aria-hidden="true"></span>
+          <span class="tx-ctx-div" aria-hidden="true">|</span>
+          <button id="tx-today-btn" class="tx-today-btn" type="button" aria-label="Jump to today">Today</button>
+        </div>
+        <div class="tx-toolbar">
+          <div class="period-tabs" role="tablist" aria-label="Transactions time period">
+            <div id="period-week-tab" class="period-split" role="tab" data-period="week">
+              <button id="week-prev-btn" class="period-split-half" type="button" aria-label="Previous week"></button>
+              <span class="period-split-sep" aria-hidden="true"></span>
+              <button id="week-next-btn" class="period-split-half" type="button" aria-label="Next week"></button>
+              <span class="period-split-label" aria-hidden="true">Week</span>
+            </div>
+            <button class="period-btn" type="button" role="tab" data-period="semi">Semi</button>
+            <div id="period-month-tab" class="period-split" role="tab" data-period="month">
+              <button id="month-prev-btn" class="period-split-half" type="button" aria-label="Previous month"></button>
+              <span class="period-split-sep" aria-hidden="true"></span>
+              <button id="month-next-btn" class="period-split-half" type="button" aria-label="Next month"></button>
+              <span class="period-split-label" aria-hidden="true">Month</span>
+            </div>
+            <div id="period-year-tab" class="period-split" role="tab" data-period="year">
+              <button id="year-prev-btn" class="period-split-half" type="button" aria-label="Previous year"></button>
+              <span class="period-split-sep" aria-hidden="true"></span>
+              <button id="year-next-btn" class="period-split-half" type="button" aria-label="Next year"></button>
+              <span class="period-split-label" aria-hidden="true">Year</span>
+            </div>
+          </div>
+          <button id="tx-type-switch" class="type-switch-btn mode-all" type="button" aria-label="Cycle transaction type filter">All</button>
+        </div>
+        <ul id="transaction-list" class="tx-list"></ul>
+      </section>
+
+      <!-- PROFILE VIEW -->
+      <section id="view-profile" class="view" hidden>
+        <div class="settings-card">
+          <div class="setting-row">
+            <span class="setting-title">Account</span>
+            <button id="account-switch-btn" class="account-switch-btn is-doom" type="button" aria-label="Switch account">Doom</button>
+          </div>
+          <div class="setting-row">
+            <label for="frame-width-select" class="setting-title">Device</label>
+            <select id="frame-width-select" class="compact-select">
+              <option value="galaxy-a56">Samsung Galaxy A56 5G</option>
+              <option value="redmi-note-13-pro">Redmi Note 13 Pro 5G</option>
+              <option value="iphone-11-pro">iPhone 11 Pro</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Period Settings</h2>
+
+          <div class="period-setting-block">
+            <div class="period-setting-label">Week</div>
+            <div class="range-pair-row">
+              <select id="week-start-select" class="compact-select" aria-label="Week start day">
+                <option value="0">Sun</option>
+                <option value="1">Mon</option>
+                <option value="2">Tue</option>
+                <option value="3">Wed</option>
+                <option value="4">Thu</option>
+                <option value="5">Fri</option>
+                <option value="6">Sat</option>
+              </select>
+              <span class="range-sep">–</span>
+              <select id="week-end-select" class="compact-select" aria-label="Week end day">
+                <option value="0">Sun</option>
+                <option value="1">Mon</option>
+                <option value="2">Tue</option>
+                <option value="3">Wed</option>
+                <option value="4">Thu</option>
+                <option value="5">Fri</option>
+                <option value="6">Sat</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="period-setting-block">
+            <div class="period-setting-label">Semi</div>
+            <div class="range-pair-row">
+              <input id="semi-start-input" class="compact-num-input" type="number" min="1" max="31" value="1" autocomplete="off" aria-label="Semi start day" />
+              <span class="range-sep">–</span>
+              <input id="semi-end-input" class="compact-num-input" type="number" min="1" max="31" value="15" autocomplete="off" aria-label="Semi end day" />
+            </div>
+          </div>
+
+          <div class="period-setting-block">
+            <div class="period-setting-label">Month</div>
+            <div class="range-pair-row">
+              <input id="month-start-input" class="compact-num-input" type="number" min="1" max="31" value="1" autocomplete="off" aria-label="Month start day" />
+              <span class="range-sep">–</span>
+              <input id="month-end-input" class="compact-num-input" type="number" min="1" max="31" value="31" autocomplete="off" aria-label="Month end day" />
+            </div>
+          </div>
+
+          <div class="period-setting-block">
+            <div class="period-setting-label">Year</div>
+            <div class="range-pair-row">
+              <select id="year-start-select" class="compact-select" aria-label="Year start month">
+                <option value="0">Jan</option>
+                <option value="1">Feb</option>
+                <option value="2">Mar</option>
+                <option value="3">Apr</option>
+                <option value="4">May</option>
+                <option value="5">Jun</option>
+                <option value="6">Jul</option>
+                <option value="7">Aug</option>
+                <option value="8">Sep</option>
+                <option value="9">Oct</option>
+                <option value="10">Nov</option>
+                <option value="11">Dec</option>
+              </select>
+              <span class="range-sep">–</span>
+              <select id="year-end-select" class="compact-select" aria-label="Year end month">
+                <option value="0">Jan</option>
+                <option value="1">Feb</option>
+                <option value="2">Mar</option>
+                <option value="3">Apr</option>
+                <option value="4">May</option>
+                <option value="5">Jun</option>
+                <option value="6">Jul</option>
+                <option value="7">Aug</option>
+                <option value="8">Sep</option>
+                <option value="9">Oct</option>
+                <option value="10">Nov</option>
+                <option value="11">Dec</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Data Management</h2>
+          <div class="settings-actions">
+            <button id="clear-all-btn" class="btn btn-danger" type="button">Clear All Transactions</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- BOTTOM NAVIGATION -->
+    <nav class="bottom-nav" aria-label="Primary navigation">
+      <button class="nav-item" type="button" data-tab="transactions">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <circle cx="4" cy="6" r="1"></circle>
+          <circle cx="4" cy="12" r="1"></circle>
+          <circle cx="4" cy="18" r="1"></circle>
+        </svg>
+        <span>Transactions</span>
+      </button>
+      <button class="nav-item active" type="button" data-tab="dashboard">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="9" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="5" rx="1"></rect>
+          <rect x="14" y="12" width="7" height="9" rx="1"></rect>
+          <rect x="3" y="16" width="7" height="5" rx="1"></rect>
+        </svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item" type="button" data-tab="profile">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <span>Profile</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ADD / EDIT TRANSACTION SHEET -->
+  <div id="sheet-backdrop" class="sheet-backdrop" hidden>
+    <div class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div class="sheet-header">
+        <h2 id="sheet-title">New Transaction</h2>
+        <button id="close-sheet-btn" class="icon-btn" type="button" aria-label="Close sheet">✕</button>
+      </div>
+
+      <form id="transaction-form" class="form" autocomplete="off">
+        <input type="hidden" id="type" value="expense" />
+        <input type="hidden" id="recurrence-mode" value="once" />
+        <div class="segmented" role="group" aria-label="Transaction type">
+          <button class="seg-btn active" type="button" data-type="expense">Expense</button>
+          <button class="seg-btn" type="button" data-type="transfer">Transfer</button>
+          <button class="seg-btn" type="button" data-type="income">Income</button>
+        </div>
+
+        <div class="field">
+          <label id="category-label" for="category">Category</label>
+          <select id="category" required></select>
+        </div>
+
+        <div class="field">
+          <label id="remarks-label" for="remarks">Remarks</label>
+          <input id="remarks" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+          <select id="destination" hidden></select>
+        </div>
+
+        <div class="field">
+          <label for="amount">Amount</label>
+          <input id="amount" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" required />
+        </div>
+
+        <div class="field">
+          <label id="date-label" for="date">Due Date</label>
+          <div class="date-recurrence-row">
+            <div class="datetime-box">
+              <span id="date-display" class="datetime-text"></span>
+              <button id="date-picker-btn" class="calendar-btn" type="button" aria-label="Pick due date">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+              </button>
+              <input id="date" class="sr-datetime" type="date" required />
+            </div>
+            <button id="recurrence-switch-btn" class="type-switch-btn mode-once" type="button" aria-label="Cycle repeat mode">Once</button>
+            <input id="recurrence-value" class="repeat-input" type="text" inputmode="numeric" autocomplete="off" aria-label="Repeat months" />
+          </div>
+        </div>
+
+        <button class="btn btn-primary" type="submit">Save Transaction</button>
+      </form>
+
+      <div class="sheet-handle" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <!-- CLEAR ALL CONFIRMATION MODAL -->
+  <div id="clear-confirm-backdrop" class="modal-backdrop" hidden>
+    <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="clear-confirm-title" aria-describedby="clear-confirm-desc">
+      <h2 id="clear-confirm-title" class="confirm-title">Clear All Transactions?</h2>
+      <p id="clear-confirm-desc" class="confirm-desc"></p>
+      <div class="confirm-actions">
+        <button id="clear-cancel-btn" class="btn btn-secondary" type="button">Cancel</button>
+        <button id="clear-confirm-btn" class="btn btn-danger" type="button">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("./sw.js").catch(function (err) {
+          console.warn("Service worker registration failed:", err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
