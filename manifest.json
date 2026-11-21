@@ -8,13 +8,13 @@
   "theme_color": "#b7f5cf",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23b7f5cf'/%3E%3Cg fill='none' stroke-width='22' stroke-linecap='round'%3E%3Cpath d='M 61 46 A 56 56 0 0 1 150 86' stroke='%230d923d'/%3E%3Cpath d='M 150 106 A 56 56 0 0 1 106 150' stroke='%2322c55e'/%3E%3Cpath d='M 86 150 A 56 56 0 0 1 46 61' stroke='%2311a146'/%3E%3C/g%3E%3Ctext x='96' y='115' text-anchor='middle' font-family='Plus Jakarta Sans, Arial, sans-serif' font-size='56' font-weight='800' fill='%230d923d'%3E%24%3C/text%3E%3C/svg%3E",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23b7f5cf'/%3E%3Cg fill='none' stroke-width='20' stroke-linecap='round'%3E%3Cpath d='M 64 52 A 50 50 0 0 1 144 87' stroke='%230d923d'/%3E%3Cpath d='M 144 105 A 50 50 0 0 1 105 144' stroke='%2322c55e'/%3E%3Cpath d='M 87 144 A 50 50 0 0 1 52 64' stroke='%2311a146'/%3E%3C/g%3E%3Ctext x='96' y='114' text-anchor='middle' font-family='Plus Jakarta Sans, Arial, sans-serif' font-size='52' font-weight='800' fill='%230d923d'%3E%24%3C/text%3E%3C/svg%3E",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23b7f5cf'/%3E%3Cg fill='none' stroke-width='58' stroke-linecap='round'%3E%3Cpath d='M 163 123 A 150 150 0 0 1 400 230' stroke='%230d923d'/%3E%3Cpath d='M 400 282 A 150 150 0 0 1 282 400' stroke='%2322c55e'/%3E%3Cpath d='M 230 400 A 150 150 0 0 1 123 163' stroke='%2311a146'/%3E%3C/g%3E%3Ctext x='256' y='306' text-anchor='middle' font-family='Plus Jakarta Sans, Arial, sans-serif' font-size='148' font-weight='800' fill='%230d923d'%3E%24%3C/text%3E%3C/svg%3E",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%23b7f5cf'/%3E%3Cg fill='none' stroke-width='52' stroke-linecap='round'%3E%3Cpath d='M 171 139 A 134 134 0 0 1 384 232' stroke='%230d923d'/%3E%3Cpath d='M 384 280 A 134 134 0 0 1 280 384' stroke='%2322c55e'/%3E%3Cpath d='M 232 384 A 134 134 0 0 1 139 171' stroke='%2311a146'/%3E%3C/g%3E%3Ctext x='256' y='304' text-anchor='middle' font-family='Plus Jakarta Sans, Arial, sans-serif' font-size='138' font-weight='800' fill='%230d923d'%3E%24%3C/text%3E%3C/svg%3E",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
