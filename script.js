@@ -76,9 +76,80 @@
   var txFilterType = "all";
   var activeTab = "dashboard";
   var editingTxId = null;
+  var billFormMode = null; // null | "create" | "edit"
   var openSwipeCard = null;
   var openSwipeDir = 0;
   var activeConfigDrag = null;
+  var zoomedManifestUrl = null;
+
+  function ensureInstallIconZoomOut() {
+    var zoomScale = 0.86;
+    var styleId = "pwa-icon-zoom-out-style";
+    if (!document.getElementById(styleId)) {
+      var st = document.createElement("style");
+      st.id = styleId;
+      st.textContent =
+        "#app-icon, .app-icon, .app-logo, .install-icon, img[src*='Icon.png'], img[src*='icon.png'] {" +
+        "  transform: scale(" + zoomScale + ");" +
+        "  transform-origin: center center;" +
+        "  transition: transform 0.16s ease;" +
+        "}";
+      if (document.head) {
+        document.head.appendChild(st);
+      }
+    }
+
+    var manifestLink = document.querySelector("link[rel='manifest']");
+    if (!manifestLink || !manifestLink.href) return;
+
+    fetch(manifestLink.href)
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (manifestJson) {
+        if (!manifestJson || !Array.isArray(manifestJson.icons) || !manifestJson.icons.length) {
+          return;
+        }
+        var updatedIcons = manifestJson.icons.map(function (ic) {
+          var copy = Object.assign({}, ic);
+          if (copy.src && typeof copy.src === "string") {
+            var absSrc = new URL(copy.src, manifestLink.href).href;
+            var img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = function () {
+              try {
+                var w = img.naturalWidth || 512;
+                var h = img.naturalHeight || 512;
+                var canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                var ctx = canvas.getContext("2d");
+                if (ctx) {
+                  ctx.clearRect(0, 0, w, h);
+                  var drawW = w * zoomScale;
+                  var drawH = h * zoomScale;
+                  var dx = (w - drawW) / 2;
+                  var dy = (h - drawH) / 2;
+                  ctx.drawImage(img, dx, dy, drawW, drawH);
+                  copy.src = canvas.toDataURL("image/png");
+                  manifestJson.icons = updatedIcons;
+                  if (zoomedManifestUrl) {
+                    URL.revokeObjectURL(zoomedManifestUrl);
+                  }
+                  var blob = new Blob([JSON.stringify(manifestJson)], { type: "application/manifest+json" });
+                  zoomedManifestUrl = URL.createObjectURL(blob);
+                  manifestLink.href = zoomedManifestUrl;
+                }
+              } catch (err) {}
+            };
+            img.src = absSrc;
+          }
+          return copy;
+        });
+        manifestJson.icons = updatedIcons;
+      })
+      .catch(function () {});
+  }
 
   function normalizeAccount(acct) {
     return acct === "Ellie" ? "Ellie" : "Doom";
@@ -439,67 +510,277 @@
     }
   }
 
-  function isBillModeChecked() {
-    var cb = document.getElementById("bill-mode-checkbox");
-    return Boolean(cb && cb.checked);
+  function isBillActionActive() {
+    return billFormMode === "create" || billFormMode === "edit";
   }
 
-  function syncBillCheckboxVisibilityForType(typeVal) {
-    var billLabel = document.getElementById("bill-mode-label");
-    var billCb = document.getElementById("bill-mode-checkbox");
-    var isExp = typeVal === "expense";
-    if (billLabel) {
-      billLabel.hidden = !isExp;
+  function styleSingleBillActionButton(btn, isActive) {
+    if (!btn) return;
+    btn.style.display = "inline-flex";
+    btn.style.alignItems = "center";
+    btn.style.justifyContent = "center";
+    btn.style.width = "74px";
+    btn.style.height = "30px";
+    btn.style.padding = "0 10px";
+    btn.style.borderRadius = "999px";
+    btn.style.fontSize = "12.5px";
+    btn.style.fontWeight = "600";
+    btn.style.lineHeight = "1";
+    btn.style.letterSpacing = "0.01em";
+    btn.style.cursor = "pointer";
+    btn.style.boxSizing = "border-box";
+    btn.style.transition = "background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease";
+
+    if (isActive) {
+      btn.style.background = "var(--blue, #2563eb)";
+      btn.style.color = "#ffffff";
+      btn.style.border = "1px solid var(--blue, #2563eb)";
+      btn.style.boxShadow = "0 2px 6px rgba(37, 99, 235, 0.28)";
+    } else {
+      btn.style.background = darkMode ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9";
+      btn.style.color = darkMode ? "#e2e8f0" : "#1e293b";
+      btn.style.border = darkMode ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid #cbd5e1";
+      btn.style.boxShadow = "0 1px 2px rgba(15, 23, 42, 0.06)";
     }
-    if (!isExp && billCb && billCb.checked) {
-      billCb.checked = false;
+  }
+
+  function applyModalBillButtonsStyles() {
+    var bar = document.getElementById("modal-bill-actions-inline");
+    if (bar) {
+      bar.style.display = "inline-flex";
+      bar.style.alignItems = "center";
+      bar.style.gap = "6px";
+      bar.style.marginLeft = "10px";
+      bar.style.verticalAlign = "middle";
     }
+
+    var billsBtn = document.getElementById("modal-bill-create-btn");
+    var editBtn = document.getElementById("modal-bill-edit-btn");
+
+    styleSingleBillActionButton(billsBtn, billFormMode === "create");
+    styleSingleBillActionButton(editBtn, billFormMode === "edit");
+  }
+
+  function syncModalBillButtonsState() {
+    var billsBtn = document.getElementById("modal-bill-create-btn");
+    var editBtn = document.getElementById("modal-bill-edit-btn");
+    if (billsBtn) {
+      billsBtn.classList.toggle("active", billFormMode === "create");
+    }
+    if (editBtn) {
+      editBtn.classList.toggle("active", billFormMode === "edit");
+    }
+    applyModalBillButtonsStyles();
+  }
+
+  function getOrCreateBillEditSelect() {
+    var sel = document.getElementById("bill-category-select");
+    if (sel) return sel;
+    var billCatInp = document.getElementById("bill-category-input");
+    if (!billCatInp || !billCatInp.parentElement) return null;
+
+    sel = document.createElement("select");
+    sel.id = "bill-category-select";
+    sel.className = billCatInp.className || "form-input";
+    sel.hidden = true;
+    sel.onchange = function () {
+      var selectedBill = transactions.find(function (tx) {
+        return isPendingBill(tx) && String(tx.id) === String(sel.value);
+      });
+      if (!selectedBill) return;
+      editingTxId = selectedBill.id;
+      var amtInput = document.getElementById("amount");
+      var dateInput = document.getElementById("date");
+      if (amtInput) {
+        amtInput.value = formatExactAmountForInput(selectedBill.amount || 0);
+      }
+      if (dateInput && selectedBill.date) {
+        dateInput.value = selectedBill.date;
+        syncDateDisplay();
+      }
+      applyBillScheduleUI(
+        selectedBill.scheduleType || "once",
+        String(selectedBill.installmentTotal || "1"),
+        false
+      );
+    };
+
+    billCatInp.parentElement.insertBefore(sel, billCatInp.nextSibling);
+    return sel;
+  }
+
+  function populateUnpaidBillsDropdown(preferredBillId) {
+    var sel = getOrCreateBillEditSelect();
+    if (!sel) return [];
+
+    var unpaidBills = getPendingBillsSorted();
+    sel.innerHTML = "";
+
+    if (!unpaidBills.length) {
+      var emptyOpt = document.createElement("option");
+      emptyOpt.value = "";
+      emptyOpt.textContent = "No unpaid bills";
+      sel.appendChild(emptyOpt);
+      sel.value = "";
+      editingTxId = null;
+      return [];
+    }
+
+    unpaidBills.forEach(function (b) {
+      var opt = document.createElement("option");
+      opt.value = String(b.id);
+      var duePart = b.date ? " (" + formatReadableDate(b.date) + ")" : "";
+      opt.textContent = (b.category || "Bill") + duePart + " - " + formatMoney(b.amount || 0);
+      sel.appendChild(opt);
+    });
+
+    var chosen = unpaidBills.find(function (b) {
+      return preferredBillId && String(b.id) === String(preferredBillId);
+    }) || unpaidBills[0];
+
+    sel.value = String(chosen.id);
+    editingTxId = chosen.id;
+    return unpaidBills;
+  }
+
+  function ensureModalBillButtons() {
+    var titleEl = document.getElementById("sheet-title");
+    if (!titleEl || !titleEl.parentElement) return;
+
+    var bar = document.getElementById("modal-bill-actions-inline");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "modal-bill-actions-inline";
+      bar.className = "modal-bill-actions-inline";
+
+      var billsBtn = document.createElement("button");
+      billsBtn.type = "button";
+      billsBtn.id = "modal-bill-create-btn";
+      billsBtn.className = "modal-bill-action-btn";
+      billsBtn.textContent = "Bills";
+      billsBtn.onclick = function () {
+        if (billFormMode === "edit") editingTxId = null;
+        billFormMode = billFormMode === "create" ? null : "create";
+        setSegmentedType("expense", false);
+        syncModalBillButtonsState();
+        syncBillModeVisibility(false);
+        var amtInput = document.getElementById("amount");
+        if (amtInput && !billFormMode) {
+          var catSel = document.getElementById("category");
+          if (catSel) applyPendingBillDetailsToExpenseForm(catSel.value, false);
+        } else if (amtInput && billFormMode === "create") {
+          amtInput.value = "";
+        }
+      };
+
+      var editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.id = "modal-bill-edit-btn";
+      editBtn.className = "modal-bill-action-btn";
+      editBtn.textContent = "Edit";
+      editBtn.onclick = function () {
+        billFormMode = billFormMode === "edit" ? null : "edit";
+        if (!billFormMode) editingTxId = null;
+        setSegmentedType("expense", false);
+        syncModalBillButtonsState();
+        syncBillModeVisibility(false);
+      };
+
+      bar.appendChild(billsBtn);
+      bar.appendChild(editBtn);
+
+      if (titleEl.nextSibling) {
+        titleEl.parentElement.insertBefore(bar, titleEl.nextSibling);
+      } else {
+        titleEl.parentElement.appendChild(bar);
+      }
+    }
+
+    var legacyCb = document.getElementById("bill-mode-checkbox");
+    var legacyLbl = document.getElementById("bill-mode-label");
+    if (legacyCb) legacyCb.hidden = true;
+    if (legacyLbl) legacyLbl.hidden = true;
+
+    syncModalBillButtonsState();
   }
 
   function syncBillModeVisibility(preserveValues) {
     var curType = ((document.getElementById("type") || {}).value) || "expense";
-    syncBillCheckboxVisibilityForType(curType);
+    if (curType !== "expense") {
+      billFormMode = null;
+    }
+    syncModalBillButtonsState();
 
-    var billChecked = isBillModeChecked() && curType === "expense";
+    var billActive = isBillActionActive() && curType === "expense";
+    var isBillEdit = billFormMode === "edit";
     var billSchedField = document.getElementById("bill-schedule-field");
     var stdSecondField = document.getElementById("standard-second-field");
     var banner = document.getElementById("bill-details-banner");
     var catLabel = document.getElementById("category-label");
     var catSel = document.getElementById("category");
     var billCatInp = document.getElementById("bill-category-input");
+    var billCatSel = getOrCreateBillEditSelect();
 
-    if (billSchedField) billSchedField.hidden = !billChecked;
-    if (stdSecondField) stdSecondField.hidden = billChecked;
+    if (billSchedField) billSchedField.hidden = !billActive;
+    if (stdSecondField) stdSecondField.hidden = billActive;
     if (banner) {
       banner.hidden = true;
       banner.textContent = "";
     }
 
-    if (billChecked) {
-      setSegmentedType("expense", Boolean(editingTxId));
+    if (billActive) {
+      setSegmentedType("expense", false);
       if (catLabel) {
-        catLabel.textContent = "Category";
-        catLabel.setAttribute("for", "bill-category-input");
+        catLabel.textContent = isBillEdit ? "Unpaid Bill" : "Category";
+        catLabel.setAttribute("for", isBillEdit ? "bill-category-select" : "bill-category-input");
       }
       if (catSel) {
         catSel.hidden = true;
         catSel.required = false;
       }
       if (billCatInp) {
-        billCatInp.hidden = false;
-        billCatInp.required = true;
-        if (!preserveValues && !editingTxId) {
+        billCatInp.hidden = isBillEdit;
+        billCatInp.required = !isBillEdit;
+        if (!isBillEdit && !preserveValues && !editingTxId) {
           billCatInp.value = "";
         }
       }
-      if (!preserveValues) {
+      if (billCatSel) {
+        billCatSel.hidden = !isBillEdit;
+        billCatSel.required = isBillEdit;
+        if (isBillEdit) {
+          var unpaid = populateUnpaidBillsDropdown(editingTxId);
+          if (unpaid.length > 0 && !preserveValues) {
+            var activeBill = unpaid.find(function (b) { return String(b.id) === String(editingTxId); }) || unpaid[0];
+            var amtInput = document.getElementById("amount");
+            var dateInput = document.getElementById("date");
+            if (amtInput) amtInput.value = formatExactAmountForInput(activeBill.amount || 0);
+            if (dateInput && activeBill.date) {
+              dateInput.value = activeBill.date;
+              syncDateDisplay();
+            }
+            applyBillScheduleUI(
+              activeBill.scheduleType || "once",
+              String(activeBill.installmentTotal || "1"),
+              false
+            );
+          }
+        }
+      }
+      if (!isBillEdit && !preserveValues) {
         applyBillScheduleUI("once", "1", true);
       }
       syncDateLabelForType("expense");
     } else {
+      if (billSchedField) billSchedField.hidden = true;
+      if (stdSecondField) stdSecondField.hidden = false;
       if (billCatInp) {
         billCatInp.hidden = true;
         billCatInp.required = false;
+      }
+      if (billCatSel) {
+        billCatSel.hidden = true;
+        billCatSel.required = false;
       }
       if (catSel) {
         catSel.hidden = false;
@@ -1283,6 +1564,7 @@
     if (btn) btn.setAttribute("aria-pressed", darkMode ? "true" : "false");
     if (moonIcon) moonIcon.hidden = darkMode;
     if (sunIcon) sunIcon.hidden = !darkMode;
+    applyModalBillButtonsStyles();
   }
 
   function formatMoney(val) {
@@ -1474,7 +1756,7 @@
   function syncDateLabelForType(typeVal) {
     var lbl = document.getElementById("date-label");
     var btn = document.getElementById("date-picker-btn");
-    var isExp = typeVal === "expense" || isBillModeChecked();
+    var isExp = typeVal === "expense" || isBillActionActive();
     if (lbl) lbl.textContent = isExp ? "Due Date" : "Date";
     if (btn) btn.setAttribute("aria-label", isExp ? "Pick due date" : "Pick date");
   }
@@ -1495,6 +1777,44 @@
     try {
       dateInput.click();
     } catch (e) {}
+  }
+
+  function ensureCalendarTriggerHitArea() {
+    var dateInput = document.getElementById("date");
+    var dateBtn = document.getElementById("date-picker-btn");
+    if (!dateBtn || !dateInput) return;
+
+    var host = dateBtn.parentElement;
+    if (host) {
+      host.style.position = "relative";
+      host.style.overflow = "visible";
+    }
+
+    dateBtn.style.position = "relative";
+    dateBtn.style.display = "inline-flex";
+    dateBtn.style.alignItems = "center";
+    dateBtn.style.justifyContent = "center";
+    dateBtn.style.minWidth = "44px";
+    dateBtn.style.minHeight = "44px";
+    dateBtn.style.width = "44px";
+    dateBtn.style.height = "44px";
+    dateBtn.style.padding = "0";
+    dateBtn.style.margin = "0 auto";
+    dateBtn.style.zIndex = "3";
+    dateBtn.style.cursor = "pointer";
+    dateBtn.style.touchAction = "manipulation";
+    dateBtn.style.webkitTapHighlightColor = "transparent";
+
+    var svgEl = dateBtn.querySelector("svg");
+    if (svgEl) {
+      svgEl.style.pointerEvents = "none";
+      svgEl.style.margin = "auto";
+    }
+
+    dateInput.style.zIndex = "1";
+    if (dateInput.type === "date") {
+      dateInput.style.pointerEvents = "none";
+    }
   }
 
   function formatAmountInputValue(rawVal) {
@@ -1597,6 +1917,33 @@
     var spentVal = totals.spentTotals[key] || 0;
     var totalVal = totals.totalTotals[key] || 0;
     return Math.max(0, totalVal - spentVal);
+  }
+
+  function getHighestBalanceSource(optionsList, selectedVal, ignoreTxId) {
+    var safeList = Array.isArray(optionsList) && optionsList.length > 0
+      ? optionsList
+      : getWalletCategoriesList();
+
+    if (selectedVal) {
+      var matchedExplicit = safeList.find(function (opt) {
+        return String(opt).trim().toLowerCase() === String(selectedVal).trim().toLowerCase();
+      });
+      if (matchedExplicit) return matchedExplicit;
+    }
+
+    var bestOption = safeList[0];
+    var bestBalance = -Infinity;
+
+    for (var i = 0; i < safeList.length; i++) {
+      var candidate = safeList[i];
+      var bal = getSourceAvailableBalance(candidate, ignoreTxId);
+      if (bal > bestBalance) {
+        bestBalance = bal;
+        bestOption = candidate;
+      }
+    }
+
+    return bestOption;
   }
 
   function autoFillTransferAmountForSource(sourceCat) {
@@ -1799,13 +2146,36 @@
       opt.textContent = c;
       destSel.appendChild(opt);
     });
-    destSel.value = sanitizeCategory(selectedSource || lastCategoryIncome, walletOptions);
+    var chosenSource = getHighestBalanceSource(walletOptions, selectedSource, editingTxId);
+    destSel.value = sanitizeCategory(chosenSource, walletOptions);
   }
 
   function syncFormFieldsForType(typeVal, selectedCategory, selectedSecondField, preserveAmount) {
-    syncBillCheckboxVisibilityForType(typeVal);
+    if (typeVal !== "expense") {
+      billFormMode = null;
+      editingTxId = null;
+    }
+    syncModalBillButtonsState();
 
-    if (isBillModeChecked() && typeVal === "expense") {
+    var billSchedField = document.getElementById("bill-schedule-field");
+    var stdSecondField = document.getElementById("standard-second-field");
+    var billCatInp = document.getElementById("bill-category-input");
+    var billCatSel = getOrCreateBillEditSelect();
+
+    if (typeVal !== "expense" || !isBillActionActive()) {
+      if (billSchedField) billSchedField.hidden = true;
+      if (stdSecondField) stdSecondField.hidden = false;
+      if (billCatInp) {
+        billCatInp.hidden = true;
+        billCatInp.required = false;
+      }
+      if (billCatSel) {
+        billCatSel.hidden = true;
+        billCatSel.required = false;
+      }
+    }
+
+    if (isBillActionActive() && typeVal === "expense") {
       syncBillModeVisibility(preserveAmount);
       return;
     }
@@ -1818,12 +2188,6 @@
     var remLabel = document.getElementById("remarks-label");
     var remInp = document.getElementById("remarks");
     var destSel = document.getElementById("destination");
-    var billCatInp = document.getElementById("bill-category-input");
-
-    if (billCatInp) {
-      billCatInp.hidden = true;
-      billCatInp.required = false;
-    }
 
     var useSecondDropdown = isTransfer || isExpense;
 
@@ -1853,7 +2217,9 @@
         : (isTransfer ? transferCategories : getExpenseDropdownCategories());
       var fallbackCat = isIncome
         ? lastCategoryIncome
-        : (isTransfer ? lastCategoryTransfer : (pendingBillCats.length > 0 ? pendingBillCats[0] : lastCategoryExpense));
+        : (isTransfer
+          ? getHighestBalanceSource(transferCategories, null, editingTxId)
+          : (pendingBillCats.length > 0 ? pendingBillCats[0] : lastCategoryExpense));
       var targetCat = selectedCategory && list.indexOf(selectedCategory) !== -1 ? selectedCategory : fallbackCat;
 
       sel.innerHTML = "";
@@ -2082,7 +2448,6 @@
       b.disabled = Boolean(isEditing && !isActive);
       b.setAttribute("aria-disabled", b.disabled ? "true" : "false");
     });
-    syncBillCheckboxVisibilityForType(t);
     return t;
   }
 
@@ -2423,10 +2788,17 @@
 
   function closeSheet() {
     editingTxId = null;
-    var billCb = document.getElementById("bill-mode-checkbox");
-    if (billCb) billCb.checked = false;
+    billFormMode = null;
+    syncModalBillButtonsState();
+    var billSchedField = document.getElementById("bill-schedule-field");
+    if (billSchedField) billSchedField.hidden = true;
     var billCatInp = document.getElementById("bill-category-input");
     if (billCatInp) billCatInp.value = "";
+    var billCatSel = getOrCreateBillEditSelect();
+    if (billCatSel) {
+      billCatSel.hidden = true;
+      billCatSel.innerHTML = "";
+    }
     var banner = document.getElementById("bill-details-banner");
     if (banner) { banner.hidden = true; banner.textContent = ""; }
     setSegmentedType(document.getElementById("type") ? document.getElementById("type").value : "expense", false);
@@ -2436,9 +2808,10 @@
 
   function openSheet(existingTx) {
     resetOpenSwipe(null);
+    ensureModalBillButtons();
+    ensureCalendarTriggerHitArea();
 
     var titleEl = document.getElementById("sheet-title");
-    var billCb = document.getElementById("bill-mode-checkbox");
     var billCatInp = document.getElementById("bill-category-input");
     var remEl = document.getElementById("remarks");
     var amtInput = document.getElementById("amount");
@@ -2449,18 +2822,19 @@
       if (titleEl) titleEl.textContent = "Edit Transaction";
 
       if (existingTx.kind === "bill") {
-        if (billCb) billCb.checked = true;
-        setSegmentedType("expense", true);
+        billFormMode = "edit";
+        setSegmentedType("expense", false);
         syncBillModeVisibility(true);
         if (billCatInp) billCatInp.value = existingTx.category || "";
+        populateUnpaidBillsDropdown(existingTx.id);
         applyBillScheduleUI(
           existingTx.scheduleType || "once",
           String(existingTx.installmentTotal || "1"),
           false
         );
       } else {
-        if (billCb) billCb.checked = false;
-        var txType = setSegmentedType(existingTx.type, true);
+        billFormMode = null;
+        var txType = setSegmentedType(existingTx.type, false);
         syncBillModeVisibility(true);
         var secondVal = txType === "transfer" ? existingTx.destination : existingTx.source;
         syncFormFieldsForType(txType, existingTx.category, secondVal, true);
@@ -2474,8 +2848,8 @@
       }
     } else {
       editingTxId = null;
+      billFormMode = null;
       if (titleEl) titleEl.textContent = "New Transaction";
-      if (billCb) billCb.checked = false;
       if (billCatInp) billCatInp.value = "";
       var t = document.getElementById("type");
       var curType = setSegmentedType(t ? t.value : "expense", false);
@@ -2490,6 +2864,8 @@
       }
     }
 
+    syncModalBillButtonsState();
+    ensureCalendarTriggerHitArea();
     var b = document.getElementById("sheet-backdrop");
     if (b) { b.hidden = false; b.style.display = "flex"; }
   }
@@ -2914,11 +3290,11 @@
       var spentVal = spentTotals[cat] || 0;
       var totalVal = totalTotals[cat] || 0;
       var hasActivity = spentVal !== 0 || totalVal !== 0;
-      var isInsufficient = spentVal > totalVal;
-      var toneClass = isInsufficient ? "is-insufficient" : "is-healthy";
+      var isDepletedOrOver = (spentVal > 0 && Math.abs(spentVal - totalVal) < 0.0001) || (spentVal > totalVal);
+      var toneClass = isDepletedOrOver ? "is-insufficient" : "is-healthy";
 
       var li = document.createElement("li");
-      li.className = "income-progress-row" + (hasActivity ? "" : " is-muted");
+      li.className = "income-progress-row" + (hasActivity ? "" : " is-muted") + (isDepletedOrOver ? " is-depleted" : "");
 
       var nameSpan = document.createElement("span");
       nameSpan.className = "income-progress-cat";
@@ -3059,6 +3435,10 @@
   }
 
   function bindEvents() {
+    ensureModalBillButtons();
+    ensureCalendarTriggerHitArea();
+    ensureInstallIconZoomOut();
+
     window.addEventListener("online", function () {
       syncAllAccountsWhenOnline();
     });
@@ -3107,15 +3487,6 @@
     if (backdrop) {
       backdrop.onclick = function (e) {
         if (e.target === backdrop) closeSheet();
-      };
-    }
-
-    var billCb = document.getElementById("bill-mode-checkbox");
-    if (billCb) {
-      billCb.onchange = function () {
-        syncBillModeVisibility(false);
-        var amtInput = document.getElementById("amount");
-        if (amtInput && !editingTxId) amtInput.value = "";
       };
     }
 
@@ -3245,16 +3616,14 @@
 
     document.querySelectorAll(".seg-btn").forEach(function (btn) {
       btn.onclick = function () {
-        if (this.disabled || editingTxId) return;
-        var t = this.getAttribute("data-type");
-        var hid = document.getElementById("type");
-        if (hid) hid.value = t;
-        document.querySelectorAll(".seg-btn").forEach(function (b) { b.classList.remove("active"); });
-        this.classList.add("active");
-        if (t !== "expense") {
-          var billCb = document.getElementById("bill-mode-checkbox");
-          if (billCb) billCb.checked = false;
+        if (this.disabled) return;
+        var t = this.getAttribute("data-type") || "expense";
+        if (t === "transfer" || t === "income") {
+          billFormMode = null;
+          editingTxId = null;
         }
+        setSegmentedType(t, false);
+        syncModalBillButtonsState();
         syncFormFieldsForType(t, null, null, false);
         if (t !== "transfer" && t !== "expense") {
           var amtInput = document.getElementById("amount");
@@ -3287,13 +3656,29 @@
 
         var remEl = document.getElementById("remarks");
 
-        if (isBillModeChecked()) {
-          var billCatInp = document.getElementById("bill-category-input");
-          var billCat = String(billCatInp ? billCatInp.value : "").trim().replace(/\s+/g, " ");
-          if (!billCat) {
-            if (billCatInp) billCatInp.focus();
+        if (isBillActionActive()) {
+          var isBillEdit = billFormMode === "edit";
+          var billCatSel = getOrCreateBillEditSelect();
+          var targetBill = isBillEdit
+            ? transactions.find(function (tx) {
+                return isPendingBill(tx) && String(tx.id) === String(billCatSel ? billCatSel.value : editingTxId);
+              })
+            : null;
+
+          if (isBillEdit && !targetBill) {
             return;
           }
+
+          var billCat = isBillEdit
+            ? String(targetBill.category || "").trim()
+            : String((document.getElementById("bill-category-input") || {}).value || "").trim().replace(/\s+/g, " ");
+
+          if (!billCat) {
+            var billCatInpEl = document.getElementById("bill-category-input");
+            if (billCatInpEl) billCatInpEl.focus();
+            return;
+          }
+
           var schedMode = sanitizeBillScheduleMode(((document.getElementById("bill-recurrence-mode") || {}).value) || "once");
           var schedValInp = document.getElementById("bill-recurrence-value");
           var monthsCount = 1;
@@ -3311,18 +3696,19 @@
           lastCategoryExpense = billCat;
           saveAccountPreferences();
 
-          if (editingTxId) {
+          if (isBillEdit) {
+            var targetId = targetBill.id;
             var prevBill = null;
             transactions = transactions.map(function (tx) {
-              if (tx.id !== editingTxId) return tx;
+              if (tx.id !== targetId) return tx;
               prevBill = JSON.parse(JSON.stringify(tx));
               return {
                 id: tx.id,
                 type: "expense",
                 kind: "bill",
-                category: billCat,
+                category: tx.category,
                 remarks: "",
-                source: "",
+                source: tx.source || "",
                 destination: "",
                 amount: amt,
                 date: dt,
@@ -3333,9 +3719,9 @@
                 paidDate: tx.paidDate || null
               };
             });
-            logEditChange(activeAccount, "bill_item", editingTxId, {
+            logEditChange(activeAccount, "bill_item", targetId, {
               before: prevBill,
-              after: transactions.find(function (x) { return x.id === editingTxId; })
+              after: transactions.find(function (x) { return x.id === targetId; })
             });
           } else {
             var batchKey = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 6);
