@@ -81,6 +81,186 @@
   var openSwipeDir = 0;
   var activeConfigDrag = null;
   var zoomedManifestUrl = null;
+  var pullRefreshInitialized = false;
+  var isRefreshingProfile = false;
+
+  function ensurePullToRefresh() {
+    if (pullRefreshInitialized) return;
+    var profileView = document.getElementById("view-profile");
+    if (!profileView) return;
+    pullRefreshInitialized = true;
+
+    profileView.style.overscrollBehaviorY = "contain";
+    var hostSurface = profileView.closest(".phone-frame, .phone-screen, .app-shell, .app-container, main") || profileView.parentElement || document.body;
+    if (hostSurface && hostSurface.style) {
+      hostSurface.style.overscrollBehaviorY = "contain";
+    }
+
+    var indicator = document.getElementById("profile-pull-refresh-indicator");
+    if (!indicator) {
+      indicator = document.createElement("div");
+      indicator.id = "profile-pull-refresh-indicator";
+      indicator.setAttribute("aria-live", "polite");
+      indicator.textContent = "Pull down to refresh";
+      indicator.style.cssText = [
+        "display:flex",
+        "align-items:center",
+        "justify-content:center",
+        "height:0px",
+        "overflow:hidden",
+        "font-size:12.5px",
+        "font-weight:600",
+        "letter-spacing:0.01em",
+        "opacity:0",
+        "transition:height 0.16s ease, opacity 0.16s ease",
+        "color:var(--muted, #64748b)",
+        "user-select:none",
+        "pointer-events:none"
+      ].join(";");
+      profileView.insertBefore(indicator, profileView.firstChild);
+    }
+
+    var thresholdPx = 56;
+    var maxPullPx = 110;
+    var startX = 0;
+    var startY = 0;
+    var pullDist = 0;
+    var tracking = false;
+    var activePointer = null; // "touch" | "mouse"
+
+    function getScrollTop() {
+      var scrollingParent = profileView.closest(".phone-screen, .app-main, .content, main");
+      var pTop = scrollingParent ? scrollingParent.scrollTop : 0;
+      return Math.max(profileView.scrollTop || 0, pTop || 0, window.scrollY || 0);
+    }
+
+    function isInteractiveTarget(target) {
+      if (!target || !target.closest) return false;
+      return Boolean(target.closest("input, select, textarea, button, a, label, [role='button'], .modal-backdrop, .sheet-backdrop"));
+    }
+
+    function setIndicatorPull(dist, ready, refreshing) {
+      indicator.style.transition = tracking ? "none" : "height 0.18s ease, opacity 0.18s ease";
+      if (refreshing) {
+        indicator.style.height = "38px";
+        indicator.style.opacity = "1";
+        indicator.textContent = "Refreshing...";
+        return;
+      }
+      if (dist <= 0) {
+        indicator.style.height = "0px";
+        indicator.style.opacity = "0";
+        return;
+      }
+      indicator.style.height = Math.min(44, Math.round(dist * 0.62)) + "px";
+      indicator.style.opacity = String(Math.min(1, dist / thresholdPx));
+      indicator.textContent = ready ? "Release to refresh" : "Pull down to refresh";
+    }
+
+    function triggerProfileRefresh() {
+      if (isRefreshingProfile) return;
+      isRefreshingProfile = true;
+      setIndicatorPull(thresholdPx, true, true);
+
+      Promise.resolve()
+        .then(function () {
+          return syncAllAccountsWhenOnline();
+        })
+        .catch(function () {})
+        .finally(function () {
+          indicator.textContent = "Updated";
+          setTimeout(function () {
+            isRefreshingProfile = false;
+            pullDist = 0;
+            setIndicatorPull(0, false, false);
+          }, 420);
+        });
+    }
+
+    function beginPull(clientX, clientY, pointerKind, target) {
+      if (activeTab !== "profile" || isRefreshingProfile) return;
+      if (isInteractiveTarget(target)) return;
+      if (hostSurface && hostSurface !== document.body && target && !hostSurface.contains(target)) return;
+      if (getScrollTop() > 2) return;
+      startX = clientX;
+      startY = clientY;
+      pullDist = 0;
+      tracking = true;
+      activePointer = pointerKind;
+    }
+
+    function movePull(clientX, clientY, cancelableEvent) {
+      if (!tracking || activeTab !== "profile" || isRefreshingProfile) return;
+      if (getScrollTop() > 2) {
+        tracking = false;
+        activePointer = null;
+        pullDist = 0;
+        setIndicatorPull(0, false, false);
+        return;
+      }
+      var dx = clientX - startX;
+      var dy = clientY - startY;
+      if (dy > 4 && Math.abs(dy) >= Math.abs(dx)) {
+        pullDist = Math.min(maxPullPx, dy * 0.7);
+        if (cancelableEvent && cancelableEvent.cancelable) {
+          cancelableEvent.preventDefault();
+        }
+        setIndicatorPull(pullDist, pullDist >= thresholdPx, false);
+      } else if (dy <= 0) {
+        pullDist = 0;
+        setIndicatorPull(0, false, false);
+      }
+    }
+
+    function endPull() {
+      if (!tracking) return;
+      tracking = false;
+      activePointer = null;
+      var shouldRefresh = pullDist >= thresholdPx;
+      pullDist = 0;
+      if (shouldRefresh) {
+        triggerProfileRefresh();
+      } else {
+        setIndicatorPull(0, false, false);
+      }
+    }
+
+    document.addEventListener("touchstart", function (e) {
+      if (!e.touches || e.touches.length !== 1) return;
+      beginPull(e.touches[0].clientX, e.touches[0].clientY, "touch", e.target);
+    }, { passive: true });
+
+    document.addEventListener("touchmove", function (e) {
+      if (activePointer !== "touch" || !e.touches || e.touches.length !== 1) return;
+      movePull(e.touches[0].clientX, e.touches[0].clientY, e);
+    }, { passive: false });
+
+    document.addEventListener("touchend", function () {
+      if (activePointer === "touch") endPull();
+    });
+
+    document.addEventListener("touchcancel", function () {
+      if (activePointer === "touch") endPull();
+    });
+
+    document.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return;
+      beginPull(e.clientX, e.clientY, "mouse", e.target);
+    });
+
+    document.addEventListener("mousemove", function (e) {
+      if (activePointer !== "mouse") return;
+      movePull(e.clientX, e.clientY, e);
+    });
+
+    document.addEventListener("mouseup", function () {
+      if (activePointer === "mouse") endPull();
+    });
+
+    window.addEventListener("blur", function () {
+      if (tracking) endPull();
+    });
+  }
 
   function ensureInstallIconZoomOut() {
     var zoomScale = 0.86;
@@ -3438,6 +3618,7 @@
     ensureModalBillButtons();
     ensureCalendarTriggerHitArea();
     ensureInstallIconZoomOut();
+    ensurePullToRefresh();
 
     window.addEventListener("online", function () {
       syncAllAccountsWhenOnline();
