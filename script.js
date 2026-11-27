@@ -22,9 +22,9 @@
   var isSyncingFromCloud = false;
   var isFlushingPendingSync = false;
 
-  var HARDCODED_DEVICE_WIDTH = "508px";
-  var HARDCODED_DEVICE_HEIGHT = "1023px";
-  var HARDCODED_DEVICE_KEY = "redmi-note-13-pro";
+  var HARDCODED_DEVICE_WIDTH = "100vw";
+  var HARDCODED_DEVICE_HEIGHT = "100dvh";
+  var HARDCODED_DEVICE_KEY = "phone-device";
 
   var ACCOUNTS = ["Doom", "Ellie"];
   var PERIODS = ["week", "semi", "month", "year"];
@@ -708,6 +708,8 @@
     btn.style.lineHeight = "1";
     btn.style.letterSpacing = "0.01em";
     btn.style.cursor = "pointer";
+    btn.style.touchAction = "manipulation";
+    btn.style.webkitTapHighlightColor = "transparent";
     btn.style.boxSizing = "border-box";
     btn.style.transition = "background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease";
 
@@ -799,7 +801,7 @@
     if (!unpaidBills.length) {
       var emptyOpt = document.createElement("option");
       emptyOpt.value = "";
-      emptyOpt.textContent = "No unpaid bills";
+      emptyOpt.textContent = "No Unpaid Bills";
       sel.appendChild(emptyOpt);
       sel.value = "";
       editingTxId = null;
@@ -835,7 +837,7 @@
       if (child.tagName === "BUTTON" && child.id && child.id.indexOf("close") !== -1) return;
       var hasCheckbox = child.querySelector ? child.querySelector("input[type='checkbox']") : null;
       var txt = (child.textContent || "").trim().toLowerCase();
-      if (hasCheckbox || child.tagName === "INPUT" && child.type === "checkbox" || txt === "bills") {
+      if (hasCheckbox || (child.tagName === "INPUT" && child.type === "checkbox") || txt === "bills") {
         child.remove();
       }
     });
@@ -1742,8 +1744,62 @@
   }
 
   function applyDeviceDimensions() {
-    document.documentElement.style.setProperty("--phone-width", HARDCODED_DEVICE_WIDTH);
-    document.documentElement.style.setProperty("--phone-height", HARDCODED_DEVICE_HEIGHT);
+    var isPhoneViewport = typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 767px), (pointer: coarse)").matches
+      : true;
+
+    var widthVal = isPhoneViewport ? "100vw" : "508px";
+    var heightVal = isPhoneViewport ? "100dvh" : "1023px";
+
+    document.documentElement.style.setProperty("--phone-width", widthVal);
+    document.documentElement.style.setProperty("--phone-height", heightVal);
+
+    var styleId = "phone-device-viewport-override";
+    var st = document.getElementById(styleId);
+    if (!st) {
+      st = document.createElement("style");
+      st.id = styleId;
+      if (document.head) document.head.appendChild(st);
+    }
+
+    st.textContent = [
+      "@media (max-width: 767px), (pointer: coarse) {",
+      "  html, body {",
+      "    margin: 0 !important;",
+      "    padding: 0 !important;",
+      "    width: 100% !important;",
+      "    height: 100% !important;",
+      "    min-height: 100vh !important;",
+      "    min-height: 100dvh !important;",
+      "    overflow: hidden !important;",
+      "    background: var(--bg, var(--surface, #f8fafc)) !important;",
+      "    -webkit-text-size-adjust: 100%;",
+      "  }",
+      "  .phone-frame, .phone-screen, .app-shell, .app-container {",
+      "    width: 100% !important;",
+      "    max-width: 100% !important;",
+      "    height: 100vh !important;",
+      "    height: 100dvh !important;",
+      "    min-height: 100vh !important;",
+      "    min-height: 100dvh !important;",
+      "    max-height: 100vh !important;",
+      "    max-height: 100dvh !important;",
+      "    margin: 0 !important;",
+      "    border: none !important;",
+      "    border-radius: 0 !important;",
+      "    box-shadow: none !important;",
+      "  }",
+      "  button, a, select, [role='button'], .nav-item, .period-btn, .seg-btn {",
+      "    touch-action: manipulation;",
+      "    -webkit-tap-highlight-color: transparent;",
+      "  }",
+      "  .bottom-nav, nav.bottom-nav, .tab-bar {",
+      "    bottom: 0 !important;",
+      "    margin-bottom: 0 !important;",
+      "    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;",
+      "  }",
+      "}"
+    ].join("\n");
   }
 
   function applyTheme(isDark) {
@@ -3634,6 +3690,11 @@
     ensureCalendarTriggerHitArea();
     ensureInstallIconZoomOut();
     ensurePullToRefresh();
+
+    window.addEventListener("resize", applyDeviceDimensions);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", applyDeviceDimensions);
+    }
 
     window.addEventListener("online", function () {
       syncAllAccountsWhenOnline();
