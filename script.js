@@ -24,7 +24,7 @@
 
   var HARDCODED_DEVICE_WIDTH = "100vw";
   var HARDCODED_DEVICE_HEIGHT = "100dvh";
-  var HARDCODED_DEVICE_KEY = "phone-device";
+  var HARDCODED_DEVICE_KEY = "galaxy-a56-phone";
 
   var ACCOUNTS = ["Doom", "Ellie"];
   var PERIODS = ["week", "semi", "month", "year"];
@@ -263,7 +263,7 @@
   }
 
   function ensureInstallIconZoomOut() {
-    var zoomScale = 0.86;
+    var zoomScale = 0.64;
     var styleId = "pwa-icon-zoom-out-style";
     if (!document.getElementById(styleId)) {
       var st = document.createElement("style");
@@ -272,6 +272,7 @@
         "#app-icon, .app-icon, .app-logo, .install-icon, img[src*='Icon.png'], img[src*='icon.png'] {" +
         "  transform: scale(" + zoomScale + ");" +
         "  transform-origin: center center;" +
+        "  border-radius: 9999px;" +
         "  transition: transform 0.16s ease;" +
         "}";
       if (document.head) {
@@ -290,8 +291,12 @@
         if (!manifestJson || !Array.isArray(manifestJson.icons) || !manifestJson.icons.length) {
           return;
         }
+        manifestJson.display = "standalone";
+        manifestJson.background_color = "#ffffff";
+        manifestJson.theme_color = "#ffffff";
+
         var updatedIcons = manifestJson.icons.map(function (ic) {
-          var copy = Object.assign({}, ic);
+          var copy = Object.assign({}, ic, { purpose: "any" });
           if (copy.src && typeof copy.src === "string") {
             var absSrc = new URL(copy.src, manifestLink.href).href;
             var img = new Image();
@@ -305,12 +310,19 @@
                 canvas.height = h;
                 var ctx = canvas.getContext("2d");
                 if (ctx) {
-                  ctx.clearRect(0, 0, w, h);
+                  ctx.fillStyle = "#ffffff";
+                  ctx.fillRect(0, 0, w, h);
                   var drawW = w * zoomScale;
                   var drawH = h * zoomScale;
                   var dx = (w - drawW) / 2;
                   var dy = (h - drawH) / 2;
+                  ctx.save();
+                  ctx.beginPath();
+                  ctx.arc(w / 2, h / 2, Math.min(drawW, drawH) / 2, 0, Math.PI * 2);
+                  ctx.closePath();
+                  ctx.clip();
                   ctx.drawImage(img, dx, dy, drawW, drawH);
+                  ctx.restore();
                   copy.src = canvas.toDataURL("image/png");
                   manifestJson.icons = updatedIcons;
                   if (zoomedManifestUrl) {
@@ -1745,7 +1757,7 @@
 
   function applyDeviceDimensions() {
     var isPhoneViewport = typeof window.matchMedia === "function"
-      ? window.matchMedia("(max-width: 767px), (pointer: coarse)").matches
+      ? window.matchMedia("(max-width: 820px), (pointer: coarse)").matches
       : true;
 
     var widthVal = isPhoneViewport ? "100vw" : "508px";
@@ -1763,7 +1775,7 @@
     }
 
     st.textContent = [
-      "@media (max-width: 767px), (pointer: coarse) {",
+      "@media (max-width: 820px), (pointer: coarse) {",
       "  html, body {",
       "    margin: 0 !important;",
       "    padding: 0 !important;",
@@ -1772,7 +1784,7 @@
       "    min-height: 100vh !important;",
       "    min-height: 100dvh !important;",
       "    overflow: hidden !important;",
-      "    background: var(--bg, var(--surface, #f8fafc)) !important;",
+      "    background: #ffffff !important;",
       "    -webkit-text-size-adjust: 100%;",
       "  }",
       "  .phone-frame, .phone-screen, .app-shell, .app-container {",
@@ -1785,9 +1797,12 @@
       "    max-height: 100vh !important;",
       "    max-height: 100dvh !important;",
       "    margin: 0 !important;",
+      "    padding-top: max(0px, env(safe-area-inset-top)) !important;",
       "    border: none !important;",
       "    border-radius: 0 !important;",
       "    box-shadow: none !important;",
+      "    background: #ffffff !important;",
+      "    box-sizing: border-box !important;",
       "  }",
       "  button, a, select, [role='button'], .nav-item, .period-btn, .seg-btn {",
       "    touch-action: manipulation;",
@@ -1796,6 +1811,7 @@
       "  .bottom-nav, nav.bottom-nav, .tab-bar {",
       "    bottom: 0 !important;",
       "    margin-bottom: 0 !important;",
+      "    background: #ffffff !important;",
       "    padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;",
       "  }",
       "}"
