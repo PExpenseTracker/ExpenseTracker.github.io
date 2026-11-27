@@ -823,9 +823,29 @@
     return unpaidBills;
   }
 
+  function removeLegacyBillTickElements(headerParent, titleEl) {
+    ["bill-mode-checkbox", "bill-mode-label"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.remove();
+    });
+
+    if (!headerParent) return;
+    Array.prototype.slice.call(headerParent.children).forEach(function (child) {
+      if (child === titleEl || child.id === "modal-bill-actions-inline") return;
+      if (child.tagName === "BUTTON" && child.id && child.id.indexOf("close") !== -1) return;
+      var hasCheckbox = child.querySelector ? child.querySelector("input[type='checkbox']") : null;
+      var txt = (child.textContent || "").trim().toLowerCase();
+      if (hasCheckbox || child.tagName === "INPUT" && child.type === "checkbox" || txt === "bills") {
+        child.remove();
+      }
+    });
+  }
+
   function ensureModalBillButtons() {
     var titleEl = document.getElementById("sheet-title");
     if (!titleEl || !titleEl.parentElement) return;
+
+    removeLegacyBillTickElements(titleEl.parentElement, titleEl);
 
     var bar = document.getElementById("modal-bill-actions-inline");
     if (!bar) {
@@ -875,11 +895,6 @@
         titleEl.parentElement.appendChild(bar);
       }
     }
-
-    var legacyCb = document.getElementById("bill-mode-checkbox");
-    var legacyLbl = document.getElementById("bill-mode-label");
-    if (legacyCb) legacyCb.hidden = true;
-    if (legacyLbl) legacyLbl.hidden = true;
 
     syncModalBillButtonsState();
   }
